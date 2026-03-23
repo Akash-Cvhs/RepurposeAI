@@ -9,6 +9,7 @@ langchain-community==0.2.12
 
 langchain-openai==0.1.7
 langchain-anthropic==0.1.13
+langchain-groq==0.1.5
 
 pydantic==2.5.0
 pandas==2.1.4

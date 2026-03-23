@@ -1,7 +1,7 @@
 from typing import Dict, Any
 import json
-from langchain_openai import ChatOpenAI
-from config import DEFAULT_LLM_MODEL, GUIDELINES_JSON
+from utils.llm_utils import get_llm
+from config import GUIDELINES_JSON
 from tools.internal_rag_tool import search_internal_docs, format_results_as_context
 
 
@@ -12,7 +12,7 @@ class InternalInsightsAgent:
     """
 
     def __init__(self):
-        self.llm = ChatOpenAI(model=DEFAULT_LLM_MODEL)
+        self.llm = get_llm()
 
     async def analyze_guidelines(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Combine RAG over internal PDFs with structured guidelines analysis"""

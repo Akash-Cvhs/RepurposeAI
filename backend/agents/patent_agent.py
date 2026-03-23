@@ -1,13 +1,13 @@
 from typing import Dict, Any
 import pandas as pd
-from langchain_openai import ChatOpenAI
-from config import DEFAULT_LLM_MODEL, PATENTS_CSV
+from utils.llm_utils import get_llm
+from config import PATENTS_CSV
 
 class PatentAgent:
     """Analyzes patent landscape for freedom-to-operate assessment"""
     
     def __init__(self):
-        self.llm = ChatOpenAI(model=DEFAULT_LLM_MODEL)
+        self.llm = get_llm()
     
     async def analyze_patents(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze patent landscape and FTO risks"""

@@ -22,6 +22,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from tools.internal_rag_tool import internal_rag_tool
+from mcp.orchestrator import get_orchestrator
 
 app = FastAPI(title="VHS MCP Server", version="1.0.0")
 
@@ -39,6 +40,11 @@ class MCPRequest(BaseModel):
 class InternalRAGInput(BaseModel):
     query: str
     top_k: int = 5
+
+
+class OrchestrationRequest(BaseModel):
+    query: str
+    molecule: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -191,3 +197,38 @@ def get_session(session_id: str):
 @app.get("/mcp/health")
 def health():
     return {"status": "ok", "tools": mcp.registry.list_tools()}
+
+
+# ---------------------------------------------------------------------------
+# Orchestration Endpoint — Main Entry Point
+# ---------------------------------------------------------------------------
+
+@app.post("/mcp/orchestrate")
+async def orchestrate_analysis(req: OrchestrationRequest):
+    """
+    Main orchestration endpoint.
+    
+    User sends a query, MCP decides which agents to invoke,
+    executes them in parallel, and returns a comprehensive report.
+    """
+    orchestrator = get_orchestrator()
+    
+    try:
+        result = await orchestrator.orchestrate(
+            query=req.query,
+            molecule=req.molecule
+        )
+        
+        return {
+            "success": True,
+            "run_id": result.get("run_id"),
+            "execution_plan": result.get("execution_plan"),
+            "completed_agents": result.get("completed_agents"),
+            "report": result.get("report"),
+            "status": result.get("status"),
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }

@@ -1,13 +1,12 @@
 from typing import Dict, Any
 from langchain.schema import BaseMessage
-from langchain_openai import ChatOpenAI
-from config import DEFAULT_LLM_MODEL
+from utils.llm_utils import get_llm
 
 class MasterAgent:
     """Orchestrates the drug repurposing analysis workflow"""
     
     def __init__(self):
-        self.llm = ChatOpenAI(model=DEFAULT_LLM_MODEL)
+        self.llm = get_llm()
     
     async def plan_analysis(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Create analysis plan based on query and molecule"""

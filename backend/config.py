@@ -1,9 +1,32 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # LLM Configuration
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+LLM_API_KEY = os.getenv("LLM_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or LLM_API_KEY
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+# Detect LLM provider based on API key
+if LLM_API_KEY:
+    if LLM_API_KEY.startswith("gsk_"):
+        LLM_PROVIDER = "groq"
+        DEFAULT_LLM_MODEL = "llama-3.1-70b-versatile"
+    elif LLM_API_KEY.startswith("sk-"):
+        LLM_PROVIDER = "openai"
+        DEFAULT_LLM_MODEL = "gpt-4"
+    elif LLM_API_KEY.startswith("sk-ant-"):
+        LLM_PROVIDER = "anthropic"
+        DEFAULT_LLM_MODEL = "claude-3-5-sonnet-20241022"
+    else:
+        LLM_PROVIDER = "openai"  # default
+        DEFAULT_LLM_MODEL = "gpt-4"
+else:
+    LLM_PROVIDER = "openai"
+    DEFAULT_LLM_MODEL = "gpt-4"
 
 # Backend Configuration
 BACKEND_HOST = os.getenv("BACKEND_HOST", "localhost")
@@ -29,6 +52,5 @@ REPORTS_DIR.mkdir(exist_ok=True)
 DATA_DIR.mkdir(exist_ok=True)
 
 # Agent Configuration
-DEFAULT_LLM_MODEL = "gpt-4"
 MAX_ITERATIONS = 10
 TIMEOUT_SECONDS = 300

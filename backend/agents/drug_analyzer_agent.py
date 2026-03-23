@@ -1,13 +1,12 @@
 from typing import Dict, Any, List
 import json
-from langchain_openai import ChatOpenAI
-from config import DEFAULT_LLM_MODEL
+from utils.llm_utils import get_llm
 
 class DrugAnalyzerAgent:
     """Analyzes drug properties, mechanisms, pharmacokinetics, and interactions"""
     
     def __init__(self):
-        self.llm = ChatOpenAI(model=DEFAULT_LLM_MODEL)
+        self.llm = get_llm()
         self.drug_database = self._load_drug_database()
     
     async def analyze_drug(self, state: Dict[str, Any]) -> Dict[str, Any]:
