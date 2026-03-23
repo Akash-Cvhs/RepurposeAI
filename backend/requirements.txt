@@ -23,3 +23,15 @@ aiofiles==23.2.1
 faiss-cpu==1.8.0
 sentence-transformers==2.7.0
 pymupdf==1.24.5
+rdkit==2023.9.6
+
+
+
+# drug analyser req
+
+streamlit
+pandas
+numpy
+matplotlib
+rdkit
+mordred

@@ -1,0 +1,21 @@
+category,name,smiles
+Alzheimer's,Donepezil (Aricept),CN(C)C(=O)CCc1ccc(OCC2COCCN2C)cc1
+Alzheimer's,Galantamine,[H][C@@]12CC[C@@H](C[C@H](O)C1)[N+]([H])(C)[C@H]2C1=CC(OC)=C(OC)C=C1
+Alzheimer's,Rivastigmine (Exelon),CCN(C(=O)OC)Cc1ccccc1OC(C)C
+Alzheimer's,Memantine (Namenda),CC1(C2CCC(CC2)NC1)C
+Alzheimer's,Benzgalantamine (Zunveyl),COC1=CC2=C(C=C1OC)C3CC4CCN(CC4C3C2OC)CC5=CC=CC=C5
+Alzheimer's,Lecanemab (Leqembi),EVQLVESGGGLVQPGGSLRLSCAASGFTFSRAWMNWVRQAPGKGLEWVSAISGSGGSTYYADSVKGRFTISRDNSKNTLYLQMNSLRAEDTAVYYCARGKGNWYYFDYWGQGTLVTVSS
+Alzheimer's,Donanemab (Kisunla),EVQLVESGGGLVQPGGSLRLSCAASGFTFSSYAMSWVRQAPGKGLEWVSAINASGTRTYYPDTVKGRFTISRDNSKNTLYLQMNSLRAEDTAVYYCAKDRGGAFGDYWGQGTLVTVSS
+Tumor,Cisplatin,Cl[Pt](Cl)(Cl)Cl
+Tumor,Cyclophosphamide,C1CN(CCC1N2C(=O)NCC2=O)P(=O)(Cl)N
+Tumor,Doxorubicin,CC1C(C(C(O1)OC2CC(CC(O2)C(=O)N)N3CC(C4=CC=CC=C4C3=O)C5=C(C=CC(=C5)OC)O)COC6=CC(=CC(=C6)O)O)O
+Tumor,Imatinib,Cc1ccc(Nc2ncnc3ccncc23)cn1Cc4ccc(NC(=O)r5cc(OCCCN6CCN(C)CC6)c(Cl)cc5)nc4
+Tumor,Methotrexate,CN(C)C(=O)NC1=CC(=C(C(=C1)N)COC2=NC(=NC3=C2C(=NC(=N3)N)N)CO)NC(=O)NC(C)C(=O)N
+Tumor,Paclitaxel,CC1=C2[C@@H](C(=O)C3([C@H]([C@@H]([C@H](C[C@@H](C3(C)C(=O)C2(C)C)COC4=CC=CC=C4)OC5C[C@@H]([C@@H]([C@H](O5)COC6=CC=CC=C6)O[C@H]7C[C@@H]([C@H]([C@@H](O7)C)O)OC8=CC=CC=C8)O[C@@H]9C[C@H]([C@@H](O9)C)O)O[C@@H]1O)C)OC(=O)[C@H](C)[C@@H](C)O)C
+Tumor,5-Fluorouracil,O=C1NC(=O)C(F)=CN1
+Tumor,Gemcitabine,NC1=NC(=O)N([C@H]2C[C@H](O)[C@@H](CO)O2)C=C1
+Tumor,Vincristine,CC[C@H]1C[C@H]([C@@](C(=O)OC)([C@H]([C@@H]([C@@H]2[C@@]1([C@@H](C[C@H](O2)O[C@H]3[C@@H]([C@H]([C@@H]([C@H](O3)C(=O)N[C@@H](Cc4ccc(Oc5ccc(cc5)N6CCN(CC6)C(=O)[C@@H]7[C@@H](c8ccccc8NC(=O)[C@@H](NC(=O)C(=O)N)C(C)C)NC(=H)N)cc4)[C@H](C[C@H](C(=O)OC)C)NC(=O)C)NC(=O)[C@H](Cc9ccc(O)cc9)NC(=O)C(=O)N10CCC[C@H](C1)NC(=O)CNC(=O)[C@H](Cc1ccccc1)NC(=O)[C@@H](NC(=O)[C@H](O)[C@@H](NC(=O)c1ncnc2ccncc12)C(C)C)[C@@H](O)c1ccc(O)cc1)O)O)O)O[C@H](CO)[C@@H](O)[C@H](O)[C@H]1O
+Paracetamol,Paracetamol (Acetaminophen),CC(=O)NC1=CC=C(O)C=C1
+Paracetamol,Phenacetin,CCOC1=CC=C(NC(C)=O)C=C1
+Paracetamol,Bucetin,COC1=CC=C(NC(C)=O)C=C1
+Paracetamol,Propacetamol,C[N+](C)(C)COC(=O)OCCOC(=O)NC1=CC=C(O)C=C1

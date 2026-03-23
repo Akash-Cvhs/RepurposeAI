@@ -1,0 +1,17 @@
+import os
+from sklearn.linear_model import LinearRegression
+import numpy as np
+import joblib
+
+X = np.random.rand(100, 5) # 100 samples, 5 features (e.g., molecular size, weight, etc.)
+y = np.random.rand(100) # 100 target DFT values
+
+model = LinearRegression()
+model.fit(X, y)
+
+os.makedirs("models", exist_ok=True)
+
+# 4. Save the model
+joblib.dump(model, "models/dft_model.pkl")
+
+print("✅ Dummy DFT model saved to models/dft_model.pkl")

@@ -1,0 +1,7 @@
+streamlit
+pandas
+numpy
+matplotlib
+rdkit
+streamlit
+mordred

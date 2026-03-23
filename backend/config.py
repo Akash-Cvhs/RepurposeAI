@@ -14,7 +14,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 if LLM_API_KEY:
     if LLM_API_KEY.startswith("gsk_"):
         LLM_PROVIDER = "groq"
-        DEFAULT_LLM_MODEL = "llama-3.1-70b-versatile"
+        DEFAULT_LLM_MODEL = "openai/gpt-oss-20b"  # Updated model
     elif LLM_API_KEY.startswith("sk-"):
         LLM_PROVIDER = "openai"
         DEFAULT_LLM_MODEL = "gpt-4"
@@ -40,6 +40,7 @@ ARCHIVES_DIR = BASE_DIR / "archives"
 REPORTS_DIR = ARCHIVES_DIR / "reports"
 RUNS_INDEX_FILE = ARCHIVES_DIR / "runs.json"
 VECTORSTORE_DIR = BASE_DIR / "vectorstore" / "faiss_index"
+MOLECULE_IMAGES_DIR = ARCHIVES_DIR / "molecule_images"
 
 # Data Files
 TRIALS_CSV = DATA_DIR / "trials.csv"
@@ -50,6 +51,7 @@ GUIDELINES_JSON = DATA_DIR / "guidelines.json"
 ARCHIVES_DIR.mkdir(exist_ok=True)
 REPORTS_DIR.mkdir(exist_ok=True)
 DATA_DIR.mkdir(exist_ok=True)
+MOLECULE_IMAGES_DIR.mkdir(exist_ok=True)
 
 # Agent Configuration
 MAX_ITERATIONS = 10

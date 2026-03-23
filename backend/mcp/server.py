@@ -22,6 +22,12 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from tools.internal_rag_tool import internal_rag_tool
+from tools.smiles_analyzer_tool import (
+    search_smiles,
+    analyze_smiles,
+    get_drug_smiles,
+    list_drug_categories
+)
 from mcp.orchestrator import get_orchestrator
 
 app = FastAPI(title="VHS MCP Server", version="1.0.0")
@@ -40,6 +46,21 @@ class MCPRequest(BaseModel):
 class InternalRAGInput(BaseModel):
     query: str
     top_k: int = 5
+
+
+class SMILESSearchInput(BaseModel):
+    query: str
+    exact_match: bool = False
+
+
+class SMILESAnalysisInput(BaseModel):
+    smiles: str
+    include_admet: bool = True
+    include_variants: bool = False
+
+
+class DrugSMILESInput(BaseModel):
+    drug_name: str
 
 
 class OrchestrationRequest(BaseModel):
@@ -116,6 +137,9 @@ class ToolRegistry:
 
 VALIDATORS: Dict[str, type] = {
     "internal_rag": InternalRAGInput,
+    "search_smiles": SMILESSearchInput,
+    "analyze_smiles": SMILESAnalysisInput,
+    "get_drug_smiles": DrugSMILESInput,
 }
 
 
@@ -170,6 +194,10 @@ class MCPServer:
 
 mcp = MCPServer()
 mcp.register_tool("internal_rag", internal_rag_tool)
+mcp.register_tool("search_smiles", search_smiles)
+mcp.register_tool("analyze_smiles", analyze_smiles)
+mcp.register_tool("get_drug_smiles", get_drug_smiles)
+mcp.register_tool("list_drug_categories", list_drug_categories)
 
 
 # ---------------------------------------------------------------------------
