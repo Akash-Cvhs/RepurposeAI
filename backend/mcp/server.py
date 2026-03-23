@@ -22,13 +22,11 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from tools.internal_rag_tool import internal_rag_tool
-from tools.smiles_analyzer_tool import (
-    search_smiles,
-    analyze_smiles,
-    get_drug_smiles,
-    list_drug_categories
-)
-from mcp.orchestrator import get_orchestrator
+from tools.clinical_trials_tool import search_clinical_trials
+from tools.patent_tool import search_patents
+from tools.web_intel_tool import gather_web_intelligence
+from tools.drug_analyzer_tool import analyze_drug
+from tools.report_generator_tool import generate_report
 
 app = FastAPI(title="VHS MCP Server", version="1.0.0")
 
@@ -48,19 +46,43 @@ class InternalRAGInput(BaseModel):
     top_k: int = 5
 
 
-class SMILESSearchInput(BaseModel):
-    query: str
+class ClinicalTrialsInput(BaseModel):
+    molecule: str
+    indication: str = ""
+    use_live_api: bool = False
+
+
+class PatentSearchInput(BaseModel):
+    molecule: str
+    indication: str = ""
+    use_live_api: bool = False
+
+
+class WebIntelInput(BaseModel):
+    query: str = ""
+    molecule: str = ""
+    indication: str = ""
+    focus: str = "all"  # market, competitive, regulatory, all
+
+
+class DrugAnalyzerInput(BaseModel):
+    action: str  # search, get_smiles, analyze, list_categories, full_analysis
+    query: str = ""
+    drug_name: str = ""
+    smiles: str = ""
+    disease: str = ""
     exact_match: bool = False
-
-
-class SMILESAnalysisInput(BaseModel):
-    smiles: str
     include_admet: bool = True
     include_variants: bool = False
+    generate_image: bool = False
 
 
-class DrugSMILESInput(BaseModel):
-    drug_name: str
+class ReportGeneratorInput(BaseModel):
+    query: str
+    molecule: str = ""
+    indication: str = ""
+    tool_results: Dict[str, Any]
+    format: str = "markdown"
 
 
 class OrchestrationRequest(BaseModel):
@@ -137,9 +159,11 @@ class ToolRegistry:
 
 VALIDATORS: Dict[str, type] = {
     "internal_rag": InternalRAGInput,
-    "search_smiles": SMILESSearchInput,
-    "analyze_smiles": SMILESAnalysisInput,
-    "get_drug_smiles": DrugSMILESInput,
+    "search_clinical_trials": ClinicalTrialsInput,
+    "search_patents": PatentSearchInput,
+    "gather_web_intelligence": WebIntelInput,
+    "analyze_drug": DrugAnalyzerInput,
+    "generate_report": ReportGeneratorInput,
 }
 
 
@@ -193,11 +217,22 @@ class MCPServer:
 # ---------------------------------------------------------------------------
 
 mcp = MCPServer()
+
+# RAG & Document Search
 mcp.register_tool("internal_rag", internal_rag_tool)
-mcp.register_tool("search_smiles", search_smiles)
-mcp.register_tool("analyze_smiles", analyze_smiles)
-mcp.register_tool("get_drug_smiles", get_drug_smiles)
-mcp.register_tool("list_drug_categories", list_drug_categories)
+
+# Clinical & Patent Data
+mcp.register_tool("search_clinical_trials", search_clinical_trials)
+mcp.register_tool("search_patents", search_patents)
+
+# Web Intelligence
+mcp.register_tool("gather_web_intelligence", gather_web_intelligence)
+
+# Drug Analysis (consolidated tool)
+mcp.register_tool("analyze_drug", analyze_drug)
+
+# Report Generation
+mcp.register_tool("generate_report", generate_report)
 
 
 # ---------------------------------------------------------------------------
@@ -234,12 +269,14 @@ def health():
 @app.post("/mcp/orchestrate")
 async def orchestrate_analysis(req: OrchestrationRequest):
     """
-    Main orchestration endpoint.
+    Main orchestration endpoint using intelligent MCP protocol.
     
-    User sends a query, MCP decides which agents to invoke,
-    executes them in parallel, and returns a comprehensive report.
+    LLM analyzes query, decides which tools to call, executes via MCP,
+    and synthesizes results into comprehensive report.
     """
-    orchestrator = get_orchestrator()
+    from mcp.intelligent_orchestrator import get_intelligent_orchestrator
+    
+    orchestrator = get_intelligent_orchestrator(mcp)
     
     try:
         result = await orchestrator.orchestrate(
@@ -247,16 +284,20 @@ async def orchestrate_analysis(req: OrchestrationRequest):
             molecule=req.molecule
         )
         
-        return {
-            "success": True,
-            "run_id": result.get("run_id"),
-            "execution_plan": result.get("execution_plan"),
-            "completed_agents": result.get("completed_agents"),
-            "report": result.get("report"),
-            "status": result.get("status"),
-        }
+        return result
+        
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": str(e),
+            "query": req.query
         }
+
+
+# ---------------------------------------------------------------------------
+# Run Server
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)

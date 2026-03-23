@@ -43,7 +43,7 @@ class InternalInsightsAgent:
     def _retrieve_internal_context(self, query: str, molecule: str) -> str:
         """Search the FAISS index for relevant internal report passages"""
         search_query = f"{molecule} {query}".strip()
-        result = search_internal_docs({"query": search_query, "k": 5})
+        result = search_internal_docs({"query": search_query, "top_k": 5})
 
         if result.get("error"):
             # Vector store not yet built or unavailable — degrade gracefully

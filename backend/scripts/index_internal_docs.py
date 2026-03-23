@@ -28,7 +28,7 @@ def extract_text(pdf_path: Path) -> str:
     return " ".join(page.get_text() for page in doc)
 
 
-def chunk_text(text: str, size: int = 400, overlap: int = 50) -> list[str]:
+def chunk_text(text: str, size: int = 200, overlap: int = 30) -> list[str]:
     words = text.split()
     chunks = []
     for i in range(0, len(words), size - overlap):

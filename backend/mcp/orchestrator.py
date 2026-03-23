@@ -9,12 +9,14 @@ from typing import Dict, Any, List
 from datetime import datetime
 from utils.llm_utils import get_llm
 
-from agents.clinical_trials_agent import ClinicalTrialsAgent
-from agents.patent_agent import PatentAgent
+# Import node-based agent functions
+from agents.clinical_trials_agent import clinical_trials_agent_node
+from agents.patent_agent import patent_agent_node
 from agents.internal_insights_agent import InternalInsightsAgent
 from agents.web_intel_agent import WebIntelAgent
 from agents.drug_analyzer_agent import DrugAnalyzerAgent
-from agents.report_generator_agent import ReportGeneratorAgent
+from agents.report_generator_agent import report_generator_agent_node
+from agents.master_agent import master_agent_node
 
 
 class MCPOrchestrator:
@@ -29,15 +31,10 @@ class MCPOrchestrator:
     def __init__(self):
         self.llm = get_llm()
         
-        # Initialize all agents
-        self.agents = {
-            "clinical_trials": ClinicalTrialsAgent(),
-            "patents": PatentAgent(),
-            "internal_insights": InternalInsightsAgent(),
-            "web_intel": WebIntelAgent(),
-            "drug_analysis": DrugAnalyzerAgent(),
-            "report": ReportGeneratorAgent(),
-        }
+        # Initialize class-based agents (those that still use classes)
+        self.internal_insights_agent = InternalInsightsAgent()
+        self.web_intel_agent = WebIntelAgent()
+        self.drug_analyzer_agent = DrugAnalyzerAgent()
 
     async def analyze_query(self, query: str, molecule: str = None) -> Dict[str, bool]:
         """
@@ -114,56 +111,77 @@ Respond ONLY with a JSON object like:
     ) -> Dict[str, Any]:
         """
         Execute selected agents in parallel and collect results.
+        Supports both node-based and class-based agents.
         """
         run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
+        # Initialize state with master agent
         state = {
             "query": query,
             "molecule": molecule,
             "run_id": run_id,
             "status": "executing",
             "execution_plan": plan,
+            "logs": [],
+            "agent_errors": {},
         }
+        
+        # Run master agent first to parse query and set up state
+        state = master_agent_node(state)
 
-        # Execute agents in parallel
+        # Execute agents based on plan
         tasks = []
         agent_names = []
 
         for agent_name, should_run in plan.items():
             if should_run and agent_name != "report":
-                agent = self.agents[agent_name]
                 
-                # Map agent names to their methods
                 if agent_name == "clinical_trials":
-                    tasks.append(agent.analyze_trials(state.copy()))
+                    # Node-based agent - run synchronously in thread
+                    tasks.append(asyncio.to_thread(clinical_trials_agent_node, state.copy()))
+                    agent_names.append(agent_name)
+                    
                 elif agent_name == "patents":
-                    tasks.append(agent.analyze_patents(state.copy()))
+                    # Node-based agent - run synchronously in thread
+                    tasks.append(asyncio.to_thread(patent_agent_node, state.copy()))
+                    agent_names.append(agent_name)
+                    
                 elif agent_name == "internal_insights":
-                    tasks.append(agent.analyze_guidelines(state.copy()))
+                    # Class-based agent - async method
+                    tasks.append(self.internal_insights_agent.analyze_guidelines(state.copy()))
+                    agent_names.append(agent_name)
+                    
                 elif agent_name == "web_intel":
-                    tasks.append(agent.gather_intelligence(state.copy()))
+                    # Class-based agent - async method
+                    tasks.append(self.web_intel_agent.gather_intelligence(state.copy()))
+                    agent_names.append(agent_name)
+                    
                 elif agent_name == "drug_analysis":
-                    tasks.append(agent.analyze_drug(state.copy()))
-                
-                agent_names.append(agent_name)
+                    # Class-based agent - async method
+                    tasks.append(self.drug_analyzer_agent.analyze_drug(state.copy()))
+                    agent_names.append(agent_name)
 
         # Wait for all agents to complete
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Merge results into state
-        for agent_name, result in zip(agent_names, results):
-            if isinstance(result, Exception):
-                state[f"{agent_name}_error"] = str(result)
-            elif isinstance(result, dict):
-                state.update(result)
+            # Merge results into state
+            for agent_name, result in zip(agent_names, results):
+                if isinstance(result, Exception):
+                    state[f"{agent_name}_error"] = str(result)
+                    state["logs"].append(f"[orchestrator] {agent_name} failed: {result}")
+                elif isinstance(result, dict):
+                    # Merge agent results into main state
+                    state.update(result)
+                    state["logs"].append(f"[orchestrator] {agent_name} completed")
 
         state["completed_agents"] = agent_names
         state["status"] = "agents_completed"
 
         # Generate final report
         if plan.get("report", True):
-            report_agent = self.agents["report"]
-            state = await report_agent.generate_report(state)
+            state = report_generator_agent_node(state)
+            state["logs"].append("[orchestrator] report generated")
 
         return state
 

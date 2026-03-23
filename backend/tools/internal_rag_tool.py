@@ -55,3 +55,24 @@ def internal_rag_tool(payload: dict) -> dict:
     ]
 
     return {"query": query, "results": results}
+
+
+# Helper functions for agent use
+def search_internal_docs(payload: dict) -> dict:
+    """Alias for internal_rag_tool for backward compatibility"""
+    return internal_rag_tool(payload)
+
+
+def format_results_as_context(results: list) -> str:
+    """Format RAG results as readable context for LLM"""
+    if not results:
+        return "No relevant internal documents found."
+    
+    formatted = []
+    for i, result in enumerate(results, 1):
+        formatted.append(f"[Document {i}] {result['source']}")
+        formatted.append(f"Relevance Score: {result['score']:.4f}")
+        formatted.append(f"{result['text']}")
+        formatted.append("---")
+    
+    return "\n".join(formatted)
