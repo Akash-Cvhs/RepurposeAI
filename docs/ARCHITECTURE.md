@@ -1,186 +1,165 @@
-# VHS Drug Repurposing Platform - Architecture
+# Architecture: Agentic AI for Drug Repurposing
 
-## System Overview
+## Goal
 
-The VHS Drug Repurposing Platform is a multi-agent AI system designed to analyze drug repurposing opportunities by integrating clinical trials data, patent information, regulatory guidelines, and market intelligence.
+A user enters a **molecule name** or **therapeutic area**.
+The system runs multiple agents (clinical trials, patents, internal docs, web) and produces a **PDF "Innovation Product Story"** report.
 
-## Architecture Components
+This is a hackathon prototype using:
+- Python + FastAPI
+- LangGraph for multi-agent orchestration
+- Streamlit for UI
+- Mock CSV/JSON datasets instead of real external APIs
 
-### 1. Multi-Agent System
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Master Agent  │───▶│  Clinical Trials │───▶│  Report         │
-│   (Orchestrator)│    │  Agent           │    │  Generator      │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                       │                       ▲
-         ▼                       ▼                       │
-┌─────────────────┐    ┌──────────────────┐             │
-│   Patent Agent  │    │  Internal        │─────────────┘
-│   (FTO Analysis)│    │  Insights Agent  │             │
-└─────────────────┘    └──────────────────┘             │
-         │                       │                       │
-         ▼                       ▼                       │
-┌─────────────────┐    ┌──────────────────┐             │
-│  Web Intel      │    │  Drug Analyzer   │─────────────┘
-│  Agent          │    │  Agent           │
-└─────────────────┘    └──────────────────┘
-         │                       │
-         ▼                       ▼
-         └──────────────┬────────┘
-                        ▼
-              ┌──────────────────┐
-              │  Coordination    │
-              │  & State Mgmt    │
-              └──────────────────┘
-```
+---
 
-### 2. Agent Responsibilities
+## High-level components
 
-#### Master Agent
-- **Role:** Workflow orchestration and planning
-- **Functions:** 
-  - Analysis planning based on query/molecule
-  - Agent coordination and state management
-  - Error handling and recovery
+- **Backend (`backend/`)**
+  - FastAPI app (`app.py`)
+  - LangGraph workflow (`graph/workflow.py`)
+  - Agent implementations (`agents/`)
+  - Utils (PDF generation, parsing, storage)
+  - Mock data (`data/`)
+  - Archives (`archives/`)
 
-#### Clinical Trials Agent
-- **Role:** Clinical evidence analysis
-- **Functions:**
-  - Search and filter relevant trials
-  - Efficacy and safety signal extraction
-  - Patient population analysis
+- **Frontend (`frontend/`)**
+  - Streamlit chat-style UI (`streamlit_app.py`)
 
-#### Patent Agent
-- **Role:** Intellectual property landscape analysis
-- **Functions:**
-  - Patent search and filtering
-  - Freedom-to-operate (FTO) risk assessment
-  - Expiration date analysis
+- **Docs (`docs/`)**
+  - Architecture, patterns, data schemas, tasks
 
-#### Internal Insights Agent
-- **Role:** Regulatory and strategic guidance
-- **Functions:**
-  - Regulatory pathway recommendations
-  - Guidelines interpretation
-  - Strategic risk assessment
+- **Tests (`tests/`)**
+  - Basic tests for agents and workflow
 
-#### Web Intelligence Agent
-- **Role:** Market and competitive intelligence
-- **Functions:**
-  - Market landscape analysis
-  - Competitive positioning
-  - Commercial viability assessment
+---
 
-#### Drug Analyzer Agent
-- **Role:** Comprehensive drug property and mechanism analysis
-- **Functions:**
-  - Drug properties and characteristics analysis
-  - Mechanism of action evaluation
-  - Pharmacokinetic profile assessment
-  - Drug-drug interaction analysis
-  - Repurposing potential scoring
+## Agent graph (LangGraph)
 
-#### Report Generator Agent
-- **Role:** Comprehensive report compilation
-- **Functions:**
-  - Executive summary generation
-  - Multi-source data integration
-  - PDF report creation
+Nodes (in `backend/agents/`):
 
-### 3. Data Flow & State Management
+- **master** (`master_agent.py`)
+  - Parse user query
+  - Identify molecule and indication (therapeutic area)
+  - Initialize shared state (`query`, `molecule`, `indication`, `logs`)
 
-#### State Schema
-```python
+- **clinical_trials** (`clinical_trials_agent.py`)
+  - Read `backend/data/trials.csv`
+  - Filter by molecule / indication
+  - Return list of trials and aggregated counts
+  - Set `state["trials"]`
+
+- **patent_landscape** (`patent_agent.py`)
+  - Read `backend/data/patents.csv`
+  - Filter by molecule / mechanism of action
+  - Compute basic Freedom-to-Operate (FTO) risk from expiry dates
+  - Set `state["patents"]` and `state["fto_risk"]`
+
+- **internal_insights** (`internal_insights_agent.py`)
+  - Process uploaded internal PDFs
+  - Extract text and summarize key points
+  - Optionally use simple RAG from `rag_utils.py`
+  - Set `state["internal_insights"]`
+
+- **web_intel** (`web_intel_agent.py`)
+  - Read `backend/data/guidelines.json` (and optionally other mock JSONs)
+  - Summarize treatment guidelines, RWE, and relevant mock "news"
+  - Set `state["web_findings"]`
+
+- **report_generator** (`report_generator_agent.py`)
+  - Read all prior state keys:
+    - `trials`, `patents`, `fto_risk`
+    - `internal_insights`, `web_findings`
+  - Build a structured markdown report with sections:
+    - Unmet Medical Needs
+    - Clinical Trial Landscape
+    - Patent Landscape & FTO
+    - Internal Insights
+    - Web Intelligence & Guidelines
+    - (Optional) Risks & Assumptions
+  - Call `pdf_utils.create_report_pdf(...)`
+  - Set:
+    - `state["report_path"]` (filesystem path / URL)
+    - `state["summary"]` (short textual summary)
+
+---
+
+## State model
+
+All nodes share a single `State` dict (or a typed model later). Expected keys:
+
+- **Input / core**
+  - `query`: original user query string
+  - `molecule`: parsed molecule name (if found)
+  - `indication`: parsed therapeutic area (if found)
+
+- **Agent outputs**
+  - `trials`: list[dict] of clinical trial records
+  - `patents`: list[dict] of patent records
+  - `fto_risk`: `"low"` | `"medium"` | `"high"` or similar
+  - `internal_insights`: string or list of bullet-point strings
+  - `web_findings`: string or list of bullet-point strings with URLs
+
+- **Report / UI**
+  - `report_path`: path/URL to generated PDF
+  - `summary`: 2-5 line summary for display in UI
+  - `logs`: list[str] of step-by-step log messages from each agent
+
+---
+
+## Backend request flow
+
+1. **Frontend -> Backend**
+   - Streamlit posts to `POST /run` with:
+     - query string
+     - uploaded PDF files
+
+2. **Backend / FastAPI (`app.py`)**
+   - Saves uploaded PDFs to a temp location
+   - Builds initial `state` with `query` and empty defaults
+   - Calls LangGraph compiled app (`app_graph.invoke(initial_state)`)
+
+3. **LangGraph workflow (`graph/workflow.py`)**
+
+   Example flow (simplified):
+
+   - Entry point: `"master"`
+   - Parallel / sequential calls:
+     - `"clinical_trials"`
+     - `"patent_landscape"`
+     - `"internal_insights"`
+     - `"web_intel"`
+   - Final node: `"report_generator"` -> `END`
+
+4. **Backend response**
+   - Returns JSON:
+     - `summary`
+     - `report_url` or `report_path`
+     - optionally `logs` (for debugging / UI)
+
+5. **Frontend**
+   - Shows progress / logs
+   - Shows summary
+   - Provides download link for PDF
+
+---
+
+## Archives
+
+- PDF reports stored under: `backend/archives/reports/`
+- Simple index file: `backend/archives/runs.json` with entries like:
+
+```json
 {
-    "query": str,                    # User research query
-    "molecule": str,                 # Optional target molecule
-    "run_id": str,                   # Unique execution identifier
-    "status": str,                   # Workflow status
-    "analysis_plan": dict,           # Agent execution plan
-    "clinical_trials_data": list,    # Trial records
-    "clinical_trials_analysis": str, # Clinical insights
-    "patents_data": list,            # Patent records
-    "patent_analysis": str,          # FTO assessment
-    "guidelines_data": dict,         # Regulatory guidelines
-    "regulatory_insights": str,      # Regulatory analysis
-    "web_intelligence": str,         # Market intelligence
-    "drug_properties": dict,         # Drug characteristics
-    "mechanism_of_action": str,      # MOA analysis
-    "pharmacokinetics": str,         # PK profile
-    "drug_interactions": list,       # DDI analysis
-    "repurposing_potential": str,    # Repurposing assessment
-    "drug_analysis": str,            # Comprehensive drug analysis
-    "executive_summary": str,        # Key findings summary
-    "report": str,                   # Full markdown report
-    "completed_agents": list         # Execution tracking
+  "id": "uuid-or-timestamp",
+  "query": "metformin oncology",
+  "molecule": "metformin",
+  "indication": "oncology",
+  "created_at": "2026-03-23T10:30:00Z",
+  "report_path": "backend/archives/reports/metformin-oncology-20260323T1030.pdf"
 }
 ```
 
-#### Workflow Execution
-1. **Initialization:** Master agent creates analysis plan
-2. **Parallel Execution:** Specialized agents run concurrently
-3. **Coordination:** Master agent aggregates results
-4. **Report Generation:** Comprehensive report compilation
-5. **Storage:** PDF generation and archive management
-
-### 4. Technology Stack
-
-#### Backend (FastAPI)
-- **Framework:** FastAPI for REST API
-- **Orchestration:** LangGraph for workflow management
-- **AI Integration:** LangChain for LLM interactions
-- **Data Processing:** Pandas for data manipulation
-- **Report Generation:** ReportLab for PDF creation
-
-#### Frontend (Streamlit)
-- **Interface:** Chat-based query input
-- **Visualization:** Analysis history and results
-- **File Management:** PDF download and archive access
-
-#### Data Storage
-- **Structured Data:** CSV files for trials/patents
-- **Configuration:** JSON for guidelines/settings
-- **Reports:** PDF files with metadata indexing
-- **State:** JSON-based run history tracking
-
-### 5. Integration Points
-
-#### External APIs (Future)
-- ClinicalTrials.gov API
-- Patent databases (USPTO, EPO)
-- PubMed/literature databases
-- Market intelligence services
-
-#### Internal Data Sources
-- Mock clinical trials dataset
-- Mock patent database
-- Regulatory guidelines repository
-- Historical analysis archive
-
-### 6. Scalability Considerations
-
-#### Horizontal Scaling
-- Stateless agent design
-- Async/await patterns
-- Database connection pooling
-- Caching strategies
-
-#### Performance Optimization
-- Parallel agent execution
-- Efficient data filtering
-- Incremental processing
-- Result caching
-
-### 7. Security & Compliance
-
-#### Data Protection
-- API key management
-- Secure file storage
-- Access control mechanisms
-- Audit trail maintenance
-
-#### Regulatory Compliance
-- Data retention policies
-- Privacy protection measures
-- Validation and verification
-- Change control processes
+These archives are used to:
+- List past runs (`GET /archives`)
+- Potentially re-download old reports from the UI.

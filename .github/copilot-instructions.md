@@ -1,141 +1,140 @@
-# GitHub Copilot Instructions for VHS Drug Repurposing Platform
+# Copilot Instructions for VHS Drug Repurposing Project
 
-## Project Overview
-This is a multi-agent AI system for drug repurposing analysis that integrates clinical trials data, patent information, regulatory guidelines, and market intelligence to generate comprehensive reports.
+## What this project is
 
-## Technology Stack
-- **Backend:** FastAPI + LangGraph + LangChain
-- **Frontend:** Streamlit
-- **AI Models:** OpenAI GPT-4 / Anthropic Claude
-- **Data Processing:** Pandas, ReportLab
-- **Testing:** pytest, unittest.mock
+- This repo implements an Agentic AI system for **drug repurposing and innovation discovery**.
+- A user enters a molecule name or therapeutic area and receives an **Innovation Product Story** PDF report.
+- The report is built by a **Master/Orchestrator agent** that coordinates specialized sub-agents:
+  - Clinical Trials
+  - Patent Landscape & FTO
+  - Internal Insights (uploaded PDFs)
+  - Web Intelligence (guidelines / news)
+  - Report Generator
 
-## Project Structure
-```
-vhs-drug-repurposing/
-├── backend/
-│   ├── agents/          # Specialized AI agents
-│   ├── graph/           # LangGraph workflow
-│   ├── data/            # Mock datasets
-│   ├── utils/           # Utility functions
-│   └── archives/        # Generated reports
-├── frontend/            # Streamlit interface
-├── docs/                # Architecture & patterns
-├── tests/               # Unit & integration tests
-└── .github/             # CI/CD configuration
-```
+## Tech stack
 
-## Agent Architecture
-Each agent follows this pattern:
-- **Input:** State dictionary with query/molecule
-- **Processing:** LLM-powered analysis of domain-specific data
-- **Output:** Updated state with analysis results
+- Backend: **Python + FastAPI**
+- Agent framework: **LangGraph** for multi-agent orchestration
+- LLM: OpenAI / compatible client via environment variables
+- Frontend: **Streamlit** for chat-style UI and report download
+- Data: **mock CSV/JSON** files in `backend/data` (trials, patents, guidelines)
+- PDF generation: helpers in `backend/utils/pdf_utils.py`
+- Archives: generated reports stored in `backend/archives/reports` with a JSON index
 
-### Agent Types
-1. **Master Agent** - Workflow orchestration
-2. **Clinical Trials Agent** - Efficacy/safety analysis
-3. **Patent Agent** - Freedom-to-operate assessment
-4. **Internal Insights Agent** - Regulatory guidance
-5. **Web Intelligence Agent** - Market analysis
-6. **Drug Analyzer Agent** - Drug properties, mechanisms, and interactions
-7. **Report Generator Agent** - Comprehensive reporting
+## Project structure (important folders)
 
-## Development Guidelines
+- `backend/app.py`: FastAPI entrypoint (`/run`, `/archives`)
+- `backend/graph/workflow.py`: LangGraph `State` definition and node wiring
+- `backend/agents/`:
+  - `master_agent.py`: orchestrates agents, parses query, sets `molecule`/`indication`
+  - `clinical_trials_agent.py`: reads `data/trials.csv`, sets `state["trials"]`
+  - `patent_agent.py`: reads `data/patents.csv`, sets `state["patents"]`, `state["fto_risk"]`
+  - `internal_insights_agent.py`: summarizes uploaded PDFs into `state["internal_insights"]`
+  - `web_intel_agent.py`: reads `data/guidelines.json`, sets `state["web_findings"]`
+  - `report_generator_agent.py`: builds report markdown and calls `pdf_utils.create_report_pdf`
+- `backend/utils/`: PDF creation, parsing, storage, optional RAG helpers
+- `backend/archives/`: generated PDFs + `runs.json` index
+- `frontend/streamlit_app.py`: Streamlit UI (query, PDF upload, logs, download)
+- `docs/ARCHITECTURE.md`: overall architecture and state keys
+- `docs/PATTERNS.md`: node signature, logging, error handling patterns
+- `docs/TASKS.md`: prioritized TODOs for humans and AI
+- `tests/`: basic tests for agents and workflow
 
-### Code Patterns
-- Always use async/await for agent methods
-- Follow state management pattern: `Dict[str, Any]`
-- Include proper error handling and logging
-- Use type hints for all functions
-- Follow the agent template in `docs/PATTERNS.md`
+## Coding guidelines
 
-### State Schema
-```python
-{
-    "query": str,                    # User research query
-    "molecule": str,                 # Optional target molecule
-    "run_id": str,                   # Unique execution ID
-    "status": str,                   # Workflow status
-    "clinical_trials_data": list,    # Trial records
-    "patents_data": list,            # Patent records
-    "regulatory_insights": str,      # Analysis results
-    "drug_properties": dict,         # Drug characteristics
-    "mechanism_of_action": str,      # MOA analysis
-    "pharmacokinetics": str,         # PK profile
-    "drug_interactions": list,       # DDI analysis
-    "drug_analysis": str,            # Comprehensive drug analysis
-    "report": str                    # Final markdown report
-}
-```
+- Prefer **simple, explicit functions** over complex abstractions; this is a hackathon-style project but should stay readable.
+- Use **type hints** for public functions.
+- Use **Pydantic models** for FastAPI request/response payloads when helpful.
+- Keep each agent **single-responsibility**:
+  - Do not mix multiple domains (e.g., patents + trials) in one file.
+- Handle **errors softly**:
+  - Do not crash the whole workflow if one agent fails.
+  - Log errors into `state["logs"]` instead of raising, unless absolutely necessary.
 
-### Testing Standards
-- Use pytest for all tests
-- Mock external dependencies (APIs, file I/O)
-- Test both success and error scenarios
-- Maintain >80% test coverage
-- Follow test patterns in `tests/` directory
+### Agent node pattern
 
-### Documentation Requirements
-- Update `docs/ARCHITECTURE.md` for system changes
-- Follow patterns in `docs/PATTERNS.md`
-- Update `docs/TASKS.md` for new features
-- Include docstrings for all public methods
+- Each agent node is a function with the pattern:
 
-## Key Rules
-1. **Always refer to documentation first** - Check `docs/` before making changes
-2. **Follow established patterns** - Use existing agent/workflow patterns
-3. **Maintain state consistency** - Preserve state structure across agents
-4. **Error handling** - Include try/catch blocks for external calls
-5. **Async operations** - Use async/await for all agent methods
-6. **Type safety** - Include type hints and validation
+  ```python
+  from typing import Dict, Any
 
-## Common Tasks
+  def some_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
+      # read from state
+      # do the work
+      # write results back into state
+      return state
+  ```
 
-### Adding New Agent
-1. Create agent class in `backend/agents/`
-2. Follow template in `docs/PATTERNS.md`
-3. Add to workflow in `backend/graph/workflow.py`
-4. Create tests in `tests/test_agents.py`
-5. Update documentation
+- Shared **state keys** used across nodes (see `docs/ARCHITECTURE.md` for full list):
+  - `query`, `molecule`, `indication`
+  - `trials`, `patents`, `fto_risk`
+  - `internal_insights`, `web_findings`
+  - `report_path`, `summary`
+  - `logs` (list of strings describing each step)
 
-### Adding New Data Source
-1. Define schema in `docs/DATA_SOURCES.md`
-2. Create mock data in `backend/data/`
-3. Add processing logic to relevant agent
-4. Update filtering and validation functions
-5. Add integration tests
+### Data access
 
-### Modifying Workflow
-1. Update `backend/graph/workflow.py`
-2. Ensure state compatibility
-3. Update tests in `tests/test_workflow.py`
-4. Document changes in `docs/ARCHITECTURE.md`
+- Always read data from `backend/data`:
+  - Trials: `trials.csv`
+  - Patents: `patents.csv`
+  - Guidelines/RWE: `guidelines.json`
+- Use `pandas` or Python stdlib (`csv`, `json`) to load mock data.
+- **Do not** integrate real external APIs in this repo; simulate with mock data.
 
-## File Naming Conventions
-- Agents: `{domain}_agent.py` (e.g., `clinical_trials_agent.py`)
-- Tests: `test_{module}.py` (e.g., `test_agents.py`)
-- Utils: `{purpose}_utils.py` (e.g., `pdf_utils.py`)
-- Data: `{source}.{format}` (e.g., `trials.csv`)
+### Logging & observability
 
-## Environment Setup
-```bash
-# Backend
-cd backend
-pip install -r requirements.txt
-uvicorn app:app --reload
+- Every agent should append a log entry to `state["logs"]`, e.g.:
 
-# Frontend  
-cd frontend
-pip install -r requirements.txt
-streamlit run streamlit_app.py
+  ```python
+  logs = state.get("logs", [])
+  logs.append("[clinical_trials] fetched 12 trials for metformin")
+  state["logs"] = logs
+  ```
 
-# Tests
-pytest tests/ -v
-```
+- The UI reads `logs` after the workflow completes and shows them to the user.
 
-## Important Notes
-- This is a demonstration platform with mock data
-- Real API integrations are planned for production
-- Focus on maintainable, testable code
-- Prioritize user experience and performance
-- Follow security best practices for API keys
+## How to help in this repo
+
+When I ask you to implement something:
+
+- If it is about **agents**:
+  - Work inside `backend/agents/`.
+  - Follow the node pattern and state keys.
+  - Return structured data (lists of dicts) suitable for tables in the report.
+
+- If it is about the **graph/workflow**:
+  - Edit `backend/graph/workflow.py`.
+  - Wire nodes and edges clearly.
+  - Use the same `State` keys defined in `docs/ARCHITECTURE.md`.
+
+- If it is about the **API**:
+  - Modify `backend/app.py`.
+  - Expose simple, JSON-based endpoints (`/run`, `/archives`).
+  - Use FastAPI best practices.
+
+- If it is about the **UI**:
+  - Modify `frontend/streamlit_app.py`.
+  - Keep the core flow:
+    - text input (query),
+    - PDF upload,
+    - call `/run`,
+    - display logs,
+    - show summary and report download link.
+
+- If it is about **tests**:
+  - Place tests under `tests/`.
+  - Add small, focused tests for each agent node and for the workflow.
+
+## Things to avoid
+
+- Do not add heavyweight frameworks or databases.
+- Do not rely on real API credentials or cloud resources.
+- Avoid breaking the agreed state keys; extend them carefully and update docs when you do.
+
+## Using docs and tasks
+
+- Before large changes, **consult**:
+  - `docs/ARCHITECTURE.md`
+  - `docs/PATTERNS.md`
+  - `docs/TASKS.md`
+- When I say "implement the next task", check `docs/TASKS.md` and work on the first unchecked item in Priority 1 unless specified otherwise.

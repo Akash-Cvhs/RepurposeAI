@@ -1,74 +1,100 @@
-from typing import Dict, Any
-from langgraph.graph import StateGraph, END
-from agents.master_agent import MasterAgent
-from agents.clinical_trials_agent import ClinicalTrialsAgent
-from agents.patent_agent import PatentAgent
-from agents.internal_insights_agent import InternalInsightsAgent
-from agents.web_intel_agent import WebIntelAgent
-from agents.drug_analyzer_agent import DrugAnalyzerAgent
-from agents.report_generator_agent import ReportGeneratorAgent
+from __future__ import annotations
 
-# Initialize agents
-master_agent = MasterAgent()
-clinical_agent = ClinicalTrialsAgent()
-patent_agent = PatentAgent()
-insights_agent = InternalInsightsAgent()
-web_agent = WebIntelAgent()
-drug_agent = DrugAnalyzerAgent()
-report_agent = ReportGeneratorAgent()
+import time
+from typing import Any, Dict, TypedDict, cast
 
-def create_workflow():
-    """Create the LangGraph workflow for drug repurposing analysis"""
-    
-    # Define the state schema
-    workflow = StateGraph(dict)
-    
-    # Add nodes
-    workflow.add_node("plan", master_agent.plan_analysis)
-    workflow.add_node("clinical_trials", clinical_agent.analyze_trials)
-    workflow.add_node("patents", patent_agent.analyze_patents)
-    workflow.add_node("insights", insights_agent.analyze_guidelines)
-    workflow.add_node("web_intel", web_agent.gather_intelligence)
-    workflow.add_node("drug_analysis", drug_agent.analyze_drug)
-    workflow.add_node("coordinate", master_agent.coordinate_agents)
-    workflow.add_node("report", report_agent.generate_report)
-    
-    # Define the flow
-    workflow.set_entry_point("plan")
-    
-    # Parallel execution of analysis agents
-    workflow.add_edge("plan", "clinical_trials")
-    workflow.add_edge("plan", "patents")
-    workflow.add_edge("plan", "insights")
-    workflow.add_edge("plan", "web_intel")
-    workflow.add_edge("plan", "drug_analysis")
-    
-    # Coordination after parallel execution
-    workflow.add_edge("clinical_trials", "coordinate")
-    workflow.add_edge("patents", "coordinate")
-    workflow.add_edge("insights", "coordinate")
-    workflow.add_edge("web_intel", "coordinate")
-    workflow.add_edge("drug_analysis", "coordinate")
-    
-    # Report generation
-    workflow.add_edge("coordinate", "report")
-    workflow.add_edge("report", END)
-    
-    return workflow.compile()
+from langgraph.graph import END, StateGraph
 
-async def run_drug_repurposing_workflow(query: str, molecule: str = None, run_id: str = None) -> Dict[str, Any]:
-    """Execute the complete drug repurposing analysis workflow"""
-    
-    # Initialize state
-    initial_state = {
-        "query": query,
-        "molecule": molecule,
-        "run_id": run_id,
-        "status": "initialized"
-    }
-    
-    # Create and run workflow
-    workflow = create_workflow()
-    result = await workflow.ainvoke(initial_state)
-    
-    return result
+from backend.agents import (
+    clinical_trials_agent_node,
+    internal_insights_agent_node,
+    master_agent_node,
+    patent_agent_node,
+    report_generator_agent_node,
+    web_intel_agent_node,
+)
+
+
+class WorkflowState(TypedDict, total=False):
+    request_id: str
+    query: str
+    molecule: str
+    indication: str
+    query_plan: list[dict]
+    master_confidence: str
+    trials: list[dict]
+    patents: list[dict]
+    fto_risk: str
+    internal_insights: list[str] | str
+    web_findings: list[str] | str
+    report_path: str
+    summary: str
+    risk_assumptions: list[str]
+    logs: list[str]
+    agent_errors: dict[str, dict[str, str]]
+    agent_metrics: dict[str, dict[str, float | str]]
+    uploaded_pdf_paths: list[str]
+    use_live_apis: bool
+    archive_run: bool
+
+
+def _timed_node(node_name: str, fn):
+    def _wrapped(state: Dict[str, Any]) -> Dict[str, Any]:
+        start = time.perf_counter()
+
+        metrics = state.get("agent_metrics")
+        if not isinstance(metrics, dict):
+            metrics = {}
+            state["agent_metrics"] = metrics
+
+        logs = state.get("logs")
+        if not isinstance(logs, list):
+            logs = []
+            state["logs"] = logs
+
+        try:
+            updated = fn(state)
+            status = "ok"
+            return_state = updated
+        except Exception as exc:  # noqa: BLE001
+            status = "failed"
+            errors = state.get("agent_errors")
+            if not isinstance(errors, dict):
+                errors = {}
+                state["agent_errors"] = errors
+            errors[node_name] = {
+                "code": f"{node_name.upper()}_UNHANDLED_EXCEPTION",
+                "message": str(exc),
+            }
+            logs.append(f"[{node_name}] unhandled error: {exc}")
+            return_state = state
+
+        elapsed_ms = (time.perf_counter() - start) * 1000.0
+        metrics[node_name] = {
+            "latency_ms": round(elapsed_ms, 3),
+            "status": status,
+        }
+        return return_state
+
+    return _wrapped
+
+
+def build_workflow_graph():
+    graph = StateGraph(WorkflowState)
+
+    graph.add_node("master", cast(Any, _timed_node("master", master_agent_node)))
+    graph.add_node("clinical_trials", cast(Any, _timed_node("clinical_trials", clinical_trials_agent_node)))
+    graph.add_node("patent_landscape", cast(Any, _timed_node("patent_landscape", patent_agent_node)))
+    graph.add_node("internal_insights", cast(Any, _timed_node("internal_insights", internal_insights_agent_node)))
+    graph.add_node("web_intel", cast(Any, _timed_node("web_intel", web_intel_agent_node)))
+    graph.add_node("report_generator", cast(Any, _timed_node("report_generator", report_generator_agent_node)))
+
+    graph.set_entry_point("master")
+    graph.add_edge("master", "clinical_trials")
+    graph.add_edge("clinical_trials", "patent_landscape")
+    graph.add_edge("patent_landscape", "internal_insights")
+    graph.add_edge("internal_insights", "web_intel")
+    graph.add_edge("web_intel", "report_generator")
+    graph.add_edge("report_generator", END)
+
+    return graph.compile()

@@ -1,11 +1,5 @@
-nct_id,title,condition,intervention,phase,status,sponsor,enrollment
-NCT12345678,Aspirin for Alzheimer's Disease Prevention,Alzheimer's Disease,Aspirin 81mg daily,Phase 3,Recruiting,University Medical Center,2000
-NCT23456789,Metformin in Cancer Prevention,Colorectal Cancer,Metformin 500mg BID,Phase 2,Active,Cancer Research Institute,500
-NCT34567890,Statins for Stroke Prevention,Stroke,Atorvastatin 20mg daily,Phase 3,Completed,Pharma Corp,1500
-NCT45678901,Hydroxychloroquine in Rheumatoid Arthritis,Rheumatoid Arthritis,Hydroxychloroquine 200mg BID,Phase 2,Recruiting,Rheumatology Center,300
-NCT56789012,Dexamethasone for COVID-19,COVID-19,Dexamethasone 6mg daily,Phase 3,Completed,Global Health Org,6000
-NCT67890123,Ibuprofen for Parkinson's Disease,Parkinson's Disease,Ibuprofen 600mg TID,Phase 2,Terminated,Neurology Institute,150
-NCT78901234,Sildenafil for Pulmonary Hypertension,Pulmonary Hypertension,Sildenafil 20mg TID,Phase 3,Approved,Cardiovascular Research,400
-NCT89012345,Thalidomide for Multiple Myeloma,Multiple Myeloma,Thalidomide 200mg daily,Phase 2,Completed,Oncology Center,250
-NCT90123456,Propranolol for PTSD,PTSD,Propranolol 40mg BID,Phase 2,Recruiting,Mental Health Institute,200
-NCT01234567,Lithium for ALS,ALS,Lithium Carbonate 300mg BID,Phase 2,Completed,Neurological Research,180
+nct_id,title,molecule,condition,phase,status,start_date,completion_date,location,sponsor
+NCT00000001,Metformin in Breast Cancer,metformin,breast cancer,Phase 2,Recruiting,2024-01-01,2026-06-01,US,Example Pharma
+NCT00000002,Metformin Combination in NSCLC,metformin,lung cancer,Phase 2,Active,2023-07-10,2026-10-30,EU,Onco Labs
+NCT00000003,Pioglitazone in Alzheimer's Disease,pioglitazone,alzheimer,Phase 3,Completed,2021-03-11,2024-12-01,US,NeuroMeds
+NCT00000004,Aspirin in Secondary Prevention,aspirin,cardiology,Phase 4,Completed,2020-01-10,2023-08-15,IN,HeartCare

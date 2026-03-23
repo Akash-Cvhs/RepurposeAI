@@ -1,66 +1,44 @@
+from __future__ import annotations
+
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Any
-from config import REPORTS_DIR, RUNS_INDEX_FILE
-from utils.pdf_utils import generate_report_pdf
+from typing import Any, Dict, List
+from uuid import uuid4
 
-def save_report(run_id: str, report_content: str, query: str, molecule: str = None) -> str:
-    """Save report and update run history"""
-    
-    # Generate PDF
-    pdf_path = generate_report_pdf(report_content, str(REPORTS_DIR), run_id)
-    
-    # Update run history
-    run_record = {
-        "id": run_id,
-        "query": query,
-        "molecule": molecule,
-        "timestamp": datetime.now().isoformat(),
-        "report_path": str(pdf_path),
-        "status": "completed"
-    }
-    
-    update_run_history(run_record)
-    
-    return str(pdf_path)
+from backend.config import ARCHIVES_DIR, RUNS_INDEX_PATH
 
-def update_run_history(run_record: Dict[str, Any]) -> None:
-    """Update the runs index file"""
-    
-    # Load existing history
-    history = get_run_history()
-    
-    # Add new record
-    history.append(run_record)
-    
-    # Keep only last 100 runs
-    history = history[-100:]
-    
-    # Save updated history
-    RUNS_INDEX_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(RUNS_INDEX_FILE, 'w') as f:
-        json.dump(history, f, indent=2)
 
-def get_run_history() -> List[Dict[str, Any]]:
-    """Get list of previous runs"""
-    
-    if not RUNS_INDEX_FILE.exists():
-        return []
-    
+def _ensure_archive_index() -> None:
+    ARCHIVES_DIR.mkdir(parents=True, exist_ok=True)
+    if not RUNS_INDEX_PATH.exists():
+        RUNS_INDEX_PATH.write_text("[]\n", encoding="utf-8")
+
+
+def read_archive_entries() -> List[Dict[str, Any]]:
+    _ensure_archive_index()
+    raw = RUNS_INDEX_PATH.read_text(encoding="utf-8").strip() or "[]"
     try:
-        with open(RUNS_INDEX_FILE, 'r') as f:
-            return json.load(f)
-    except (json.JSONDecodeError, FileNotFoundError):
+        entries = json.loads(raw)
+    except json.JSONDecodeError:
         return []
+    if not isinstance(entries, list):
+        return []
+    return entries
 
-def get_report_by_id(run_id: str) -> Dict[str, Any]:
-    """Get specific report by run ID"""
-    
-    history = get_run_history()
-    
-    for run in history:
-        if run["id"] == run_id:
-            return run
-    
-    return None
+
+def append_archive_entry(state: Dict[str, Any]) -> Dict[str, Any]:
+    entries = read_archive_entries()
+    entry = {
+        "id": str(uuid4()),
+        "query": state.get("query"),
+        "molecule": state.get("molecule"),
+        "indication": state.get("indication"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "report_path": state.get("report_path"),
+    }
+    entries.append(entry)
+    tmp_path = Path(f"{RUNS_INDEX_PATH}.tmp")
+    tmp_path.write_text(json.dumps(entries, indent=2), encoding="utf-8")
+    tmp_path.replace(RUNS_INDEX_PATH)
+    return entry

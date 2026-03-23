@@ -1,288 +1,215 @@
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-import pandas as pd
-from backend.agents.clinical_trials_agent import ClinicalTrialsAgent
-from backend.agents.patent_agent import PatentAgent
-from backend.agents.master_agent import MasterAgent
-from backend.agents.drug_analyzer_agent import DrugAnalyzerAgent
+from pathlib import Path
+from typing import Any, Dict
 
-class TestClinicalTrialsAgent:
-    
-    @pytest.fixture
-    def agent(self):
-        return ClinicalTrialsAgent()
-    
-    @pytest.fixture
-    def sample_state(self):
-        return {
-            "query": "Alzheimer's disease",
-            "molecule": "aspirin",
-            "run_id": "test_run_123"
-        }
-    
-    @pytest.fixture
-    def mock_trials_df(self):
-        return pd.DataFrame([
-            {
-                'nct_id': 'NCT12345678',
-                'title': 'Aspirin for Alzheimer\'s Disease',
-                'condition': 'Alzheimer\'s Disease',
-                'intervention': 'Aspirin 81mg',
-                'phase': 'Phase 3',
-                'status': 'Recruiting',
-                'sponsor': 'University Medical Center',
-                'enrollment': 2000
-            }
-        ])
-    
-    @pytest.mark.asyncio
-    async def test_analyze_trials_success(self, agent, sample_state, mock_trials_df):
-        """Test successful clinical trials analysis"""
-        
-        with patch('pandas.read_csv', return_value=mock_trials_df):
-            with patch.object(agent, '_analyze_findings', return_value="Test analysis"):
-                result = await agent.analyze_trials(sample_state)
-                
-                assert "clinical_trials_data" in result
-                assert "clinical_trials_analysis" in result
-                assert result["clinical_trials_analysis"] == "Test analysis"
-                assert len(result["clinical_trials_data"]) == 1
-    
-    @pytest.mark.asyncio
-    async def test_analyze_trials_no_file(self, agent, sample_state):
-        """Test handling of missing data file"""
-        
-        with patch('pandas.read_csv', side_effect=FileNotFoundError):
-            result = await agent.analyze_trials(sample_state)
-            
-            assert result["clinical_trials_data"] == []
-            assert result["clinical_trials_analysis"] == "No clinical trials data available"
-    
-    def test_filter_trials(self, agent, mock_trials_df):
-        """Test trial filtering logic"""
-        
-        # Test molecule filtering
-        filtered = agent._filter_trials(mock_trials_df, "", "aspirin")
-        assert len(filtered) == 1
-        
-        # Test query filtering
-        filtered = agent._filter_trials(mock_trials_df, "Alzheimer", "")
-        assert len(filtered) == 1
-        
-        # Test no matches
-        filtered = agent._filter_trials(mock_trials_df, "cancer", "")
-        assert len(filtered) == 0
+from backend.agents.clinical_trials_agent import clinical_trials_agent_node
+from backend.agents.internal_insights_agent import internal_insights_agent_node
+from backend.agents.patent_agent import patent_agent_node
+from backend.agents.report_generator_agent import report_generator_agent_node
+from backend.agents.web_intel_agent import web_intel_agent_node
 
-class TestPatentAgent:
-    
-    @pytest.fixture
-    def agent(self):
-        return PatentAgent()
-    
-    @pytest.fixture
-    def sample_state(self):
-        return {
-            "query": "Alzheimer's treatment",
-            "molecule": "aspirin",
-            "run_id": "test_run_456"
-        }
-    
-    @pytest.fixture
-    def mock_patents_df(self):
-        return pd.DataFrame([
-            {
-                'patent_number': 'US10123456',
-                'title': 'Methods for treating Alzheimer\'s with aspirin',
-                'assignee': 'Pharma Inc',
-                'filing_date': '2015-03-15',
-                'expiration_date': '2035-03-15',
-                'abstract': 'Novel methods for using aspirin in Alzheimer\'s treatment',
-                'status': 'Active'
-            }
-        ])
-    
-    @pytest.mark.asyncio
-    async def test_analyze_patents_success(self, agent, sample_state, mock_patents_df):
-        """Test successful patent analysis"""
-        
-        with patch('pandas.read_csv', return_value=mock_patents_df):
-            with patch.object(agent, '_analyze_fto_risks', return_value="FTO analysis"):
-                result = await agent.analyze_patents(sample_state)
-                
-                assert "patents_data" in result
-                assert "patent_analysis" in result
-                assert result["patent_analysis"] == "FTO analysis"
-                assert len(result["patents_data"]) == 1
-    
-    def test_filter_patents(self, agent, mock_patents_df):
-        """Test patent filtering logic"""
-        
-        # Test molecule filtering
-        filtered = agent._filter_patents(mock_patents_df, "", "aspirin")
-        assert len(filtered) == 1
-        
-        # Test query filtering
-        filtered = agent._filter_patents(mock_patents_df, "Alzheimer", "")
-        assert len(filtered) == 1
 
-class TestMasterAgent:
-    
-    @pytest.fixture
-    def agent(self):
-        return MasterAgent()
-    
-    @pytest.fixture
-    def sample_state(self):
-        return {
-            "query": "drug repurposing opportunity",
-            "molecule": "metformin",
-            "run_id": "test_run_789"
-        }
-    
-    @pytest.mark.asyncio
-    async def test_plan_analysis(self, agent, sample_state):
-        """Test analysis planning"""
-        
-        result = await agent.plan_analysis(sample_state)
-        
-        assert "analysis_plan" in result
-        assert result["status"] == "planned"
-        
-        plan = result["analysis_plan"]
-        assert plan["clinical_trials"] is True
-        assert plan["patents"] is True
-        assert plan["internal_insights"] is True
-        assert plan["drug_analysis"] is True
-        assert plan["report_generation"] is True
-    
-    @pytest.mark.asyncio
-    async def test_coordinate_agents(self, agent, sample_state):
-        """Test agent coordination"""
-        
-        sample_state["analysis_plan"] = {
-            "clinical_trials": True,
-            "patents": True,
-            "internal_insights": True,
-            "web_intel": True,
-            "drug_analysis": True,
-            "report_generation": True
-        }
-        
-        result = await agent.coordinate_agents(sample_state)
-        
-        assert "completed_agents" in result
-        assert result["status"] == "coordinated"
-        assert len(result["completed_agents"]) == 5  # Excludes report_generation
+def test_clinical_trials_agent_basic() -> None:
+    state = {"molecule": "metformin", "indication": "breast cancer", "logs": [], "use_live_apis": False}
+    new_state = clinical_trials_agent_node(state)
+    assert "trials" in new_state
+    assert isinstance(new_state["trials"], list)
 
-class TestDrugAnalyzerAgent:
-    
-    @pytest.fixture
-    def agent(self):
-        return DrugAnalyzerAgent()
-    
-    @pytest.fixture
-    def sample_state(self):
+
+def test_clinical_trials_agent_uses_live_api(monkeypatch) -> None:
+    def fake_request_json(**kwargs):
         return {
-            "query": "Alzheimer's disease treatment",
-            "molecule": "aspirin",
-            "run_id": "test_run_drug_001"
+            "studies": [
+                {
+                    "protocolSection": {
+                        "identificationModule": {
+                            "nctId": "NCT99999999",
+                            "briefTitle": "Metformin in Breast Cancer",
+                        },
+                        "statusModule": {
+                            "overallStatus": "RECRUITING",
+                            "startDateStruct": {"date": "2025-01"},
+                            "completionDateStruct": {"date": "2027-12"},
+                        },
+                        "conditionsModule": {"conditions": ["Breast Cancer"]},
+                        "designModule": {"phases": ["PHASE2"]},
+                        "sponsorCollaboratorsModule": {"leadSponsor": {"name": "Demo Sponsor"}},
+                        "contactsLocationsModule": {
+                            "locations": [{"city": "Boston", "country": "United States"}]
+                        },
+                    }
+                }
+            ]
         }
-    
-    @pytest.fixture
-    def sample_state_no_molecule(self):
+
+    monkeypatch.setattr("backend.agents.clinical_trials_agent.request_json", fake_request_json)
+
+    state = {"molecule": "metformin", "indication": "breast cancer", "logs": [], "use_live_apis": True}
+    new_state = clinical_trials_agent_node(state)
+
+    assert len(new_state["trials"]) == 1
+    assert new_state["trials"][0]["nct_id"] == "NCT99999999"
+    assert new_state["trials"][0]["source"] == "clinicaltrials.gov"
+
+
+def test_clinical_trials_agent_falls_back_to_csv(monkeypatch) -> None:
+    def fake_request_json(**kwargs):
+        raise RuntimeError("network unavailable")
+
+    monkeypatch.setattr("backend.agents.clinical_trials_agent.request_json", fake_request_json)
+
+    state = {"molecule": "metformin", "indication": "breast cancer", "logs": [], "use_live_apis": True}
+    new_state = clinical_trials_agent_node(state)
+
+    assert isinstance(new_state["trials"], list)
+    assert len(new_state["trials"]) >= 1
+    assert any("fallback" in log.lower() for log in new_state["logs"])
+
+
+def test_patent_agent_sets_fto_risk() -> None:
+    state = {"molecule": "metformin", "logs": []}
+    new_state = patent_agent_node(state)
+    assert "fto_risk" in new_state
+    assert new_state["fto_risk"] in {"low", "medium", "high", "unknown"}
+
+
+def test_patent_agent_uses_serpapi_when_available(monkeypatch) -> None:
+    def fake_request_json(**kwargs):
         return {
-            "query": "cardiovascular disease prevention",
-            "run_id": "test_run_drug_002"
+            "patent_results": [
+                {
+                    "publication_number": "US20240012345A1",
+                    "title": "Metformin compositions for breast cancer",
+                    "snippet": "Compositions and methods for treatment of breast cancer.",
+                    "publication_date": "2024-01-18",
+                    "assignee": "Demo Pharma",
+                    "patent_link": "https://patents.google.com/patent/US20240012345A1",
+                }
+            ]
         }
-    
-    @pytest.mark.asyncio
-    async def test_analyze_drug_with_molecule(self, agent, sample_state):
-        """Test drug analysis with specified molecule"""
-        
-        # Mock all the internal analysis methods
-        with patch.object(agent, '_analyze_drug_properties', return_value={"molecule_name": "aspirin", "analysis": "test"}):
-            with patch.object(agent, '_analyze_mechanism_of_action', return_value="COX inhibition"):
-                with patch.object(agent, '_analyze_pharmacokinetics', return_value="Rapid absorption"):
-                    with patch.object(agent, '_analyze_drug_interactions', return_value=[]):
-                        with patch.object(agent, '_assess_repurposing_potential', return_value="High potential"):
-                            with patch.object(agent, '_compile_drug_analysis', return_value="Comprehensive analysis"):
-                                
-                                result = await agent.analyze_drug(sample_state)
-                                
-                                assert "drug_analysis" in result
-                                assert "drug_properties" in result
-                                assert "mechanism_of_action" in result
-                                assert "pharmacokinetics" in result
-                                assert "drug_interactions" in result
-                                assert "repurposing_potential" in result
-                                assert result["drug_analysis"] == "Comprehensive analysis"
-    
-    @pytest.mark.asyncio
-    async def test_analyze_drug_no_molecule(self, agent, sample_state_no_molecule):
-        """Test drug analysis without specified molecule"""
-        
-        with patch.object(agent, '_extract_molecule_from_query', return_value=""):
-            result = await agent.analyze_drug(sample_state_no_molecule)
-            
-            assert result["drug_analysis"] == "No specific drug identified for detailed analysis"
-            assert result["drug_properties"] == {}
-            assert result["mechanism_of_action"] == ""
-            assert result["pharmacokinetics"] == ""
-            assert result["drug_interactions"] == []
-            assert result["repurposing_potential"] == ""
-    
-    @pytest.mark.asyncio
-    async def test_extract_molecule_from_query(self, agent):
-        """Test molecule extraction from query"""
-        
-        # Mock LLM response
-        mock_response = MagicMock()
-        mock_response.content = "aspirin"
-        
-        with patch.object(agent.llm, 'ainvoke', return_value=mock_response):
-            result = await agent._extract_molecule_from_query("aspirin for heart disease")
-            assert result == "aspirin"
-    
-    @pytest.mark.asyncio
-    async def test_extract_molecule_none_found(self, agent):
-        """Test molecule extraction when none found"""
-        
-        # Mock LLM response
-        mock_response = MagicMock()
-        mock_response.content = "none"
-        
-        with patch.object(agent.llm, 'ainvoke', return_value=mock_response):
-            result = await agent._extract_molecule_from_query("general cardiovascular treatments")
-            assert result == ""
-    
-    def test_extract_therapeutic_class(self, agent):
-        """Test therapeutic class extraction"""
-        
-        analysis_text = "This drug is an NSAID that works by inhibiting COX enzymes"
-        result = agent._extract_therapeutic_class(analysis_text)
-        assert result == "NSAID"
-        
-        analysis_text_unknown = "This is a novel compound with unknown mechanism"
-        result = agent._extract_therapeutic_class(analysis_text_unknown)
-        assert result == "Unknown"
-    
-    def test_extract_indications(self, agent):
-        """Test indication extraction"""
-        
-        analysis_text = "Used for treating pain, inflammation, and cardiovascular disease prevention"
-        result = agent._extract_indications(analysis_text)
-        assert "pain" in result
-        assert "inflammation" in result
-        assert "cardiovascular disease" in result
-        assert len(result) <= 3  # Should return max 3 indications
-    
-    def test_parse_interactions(self, agent):
-        """Test drug interaction parsing"""
-        
-        interaction_text = "Significant interaction with warfarin due to increased bleeding risk. CYP enzyme interactions possible."
-        result = agent._parse_interactions(interaction_text)
-        
-        assert len(result) >= 1
-        # Check if warfarin interaction is detected
-        warfarin_found = any(interaction["drug"] == "Warfarin" for interaction in result)
-        assert warfarin_found
+
+    monkeypatch.setattr("backend.agents.patent_agent.SERPAPI_API_KEY", "test-key")
+    monkeypatch.setattr("backend.agents.patent_agent.request_json", fake_request_json)
+
+    state = {"molecule": "metformin", "indication": "breast cancer", "logs": [], "use_live_apis": True}
+    new_state = patent_agent_node(state)
+
+    assert len(new_state["patents"]) == 1
+    assert new_state["patents"][0]["source"] == "serpapi_google_patents"
+    assert new_state["patents"][0]["patent_id"] == "US20240012345A1"
+
+
+def test_patent_agent_fallbacks_when_serpapi_fails(monkeypatch) -> None:
+    def fake_request_json(**kwargs):
+        raise RuntimeError("serpapi unavailable")
+
+    monkeypatch.setattr("backend.agents.patent_agent.SERPAPI_API_KEY", "test-key")
+    monkeypatch.setattr("backend.agents.patent_agent.request_json", fake_request_json)
+
+    state = {"molecule": "metformin", "logs": [], "use_live_apis": True}
+    new_state = patent_agent_node(state)
+
+    assert isinstance(new_state["patents"], list)
+    assert len(new_state["patents"]) >= 1
+    assert any("fallback" in log.lower() for log in new_state["logs"])
+
+
+def test_patent_agent_parses_google_patents_organic_results(monkeypatch) -> None:
+    def fake_request_json(**kwargs):
+        return {
+            "organic_results": [
+                {
+                    "patent_id": "patent/EP2264377A2/en",
+                    "patent_link": "https://patents.google.com/patent/EP2264377A2/en",
+                    "title": "Solar tracking module",
+                    "snippet": "A module for tracking and concentrating sunlight.",
+                    "publication_date": "2010-12-22",
+                    "assignee": "Green Plus Co. Ltd.",
+                    "publication_number": "EP2264377A2",
+                }
+            ]
+        }
+
+    monkeypatch.setattr("backend.agents.patent_agent.SERPAPI_API_KEY", "test-key")
+    monkeypatch.setattr("backend.agents.patent_agent.request_json", fake_request_json)
+
+    state = {"molecule": "metformin", "indication": "oncology", "logs": [], "use_live_apis": True}
+    new_state = patent_agent_node(state)
+
+    assert len(new_state["patents"]) == 1
+    assert new_state["patents"][0]["patent_id"] == "EP2264377A2"
+    assert new_state["patents"][0]["jurisdiction"] == "EP"
+
+
+def test_internal_insights_handles_no_pdfs() -> None:
+    state = {"uploaded_pdf_paths": [], "logs": []}
+    new_state = internal_insights_agent_node(state)
+    assert "internal_insights" in new_state
+    assert isinstance(new_state["internal_insights"], str)
+
+
+def test_web_intel_agent_returns_findings() -> None:
+    state = {"molecule": "metformin", "indication": "breast cancer", "logs": [], "use_live_apis": False}
+    new_state = web_intel_agent_node(state)
+    assert "web_findings" in new_state
+    assert isinstance(new_state["web_findings"], list)
+
+
+def test_web_intel_agent_uses_tavily_when_available(monkeypatch) -> None:
+    def fake_request_json(**kwargs):
+        return {
+            "results": [
+                {
+                    "title": "Metformin in oncology review",
+                    "content": "A review discussing potential repurposing routes in breast cancer.",
+                    "url": "https://example.org/metformin-oncology-review",
+                }
+            ]
+        }
+
+    monkeypatch.setattr("backend.agents.web_intel_agent.TAVILY_API_KEY", "test-key")
+    monkeypatch.setattr("backend.agents.web_intel_agent.request_json", fake_request_json)
+
+    state = {"molecule": "metformin", "indication": "breast cancer", "logs": [], "use_live_apis": True}
+    new_state = web_intel_agent_node(state)
+
+    assert len(new_state["web_findings"]) == 1
+    assert "Tavily" in new_state["web_findings"][0]
+
+
+def test_web_intel_agent_fallbacks_when_tavily_fails(monkeypatch) -> None:
+    def fake_request_json(**kwargs):
+        raise RuntimeError("tavily unavailable")
+
+    monkeypatch.setattr("backend.agents.web_intel_agent.TAVILY_API_KEY", "test-key")
+    monkeypatch.setattr("backend.agents.web_intel_agent.request_json", fake_request_json)
+
+    state = {"molecule": "metformin", "indication": "breast cancer", "logs": [], "use_live_apis": True}
+    new_state = web_intel_agent_node(state)
+
+    assert isinstance(new_state["web_findings"], list)
+    assert len(new_state["web_findings"]) >= 1
+    assert any("mock guidelines" in log.lower() for log in new_state["logs"])
+
+
+def test_report_generator_creates_pdf() -> None:
+    state = {
+        "query": "metformin for breast cancer",
+        "molecule": "metformin",
+        "indication": "breast cancer",
+        "trials": [],
+        "patents": [],
+        "fto_risk": "medium",
+        "internal_insights": "No internal documents uploaded.",
+        "web_findings": [],
+        "query_plan": [
+            {"agent": "clinical_trials", "objective": "Fetch trial landscape", "enabled": True}
+        ],
+        "logs": [],
+        "archive_run": False,
+    }
+    new_state = report_generator_agent_node(state)
+    assert Path(new_state["report_path"]).exists()
+    assert "summary" in new_state
+    assert "risk_assumptions" in new_state
+    assert isinstance(new_state["risk_assumptions"], list)
+    assert "agent_errors" in new_state
