@@ -1,0 +1,33 @@
+{
+  "nct_id": "NCT12345678",
+  "title": "Aspirin for Alzheimer's Disease Prevention Study",
+  "brief_summary": "This study evaluates the efficacy and safety of low-dose aspirin in preventing cognitive decline in patients at risk for Alzheimer's disease.",
+  "detailed_description": "A randomized, double-blind, placebo-controlled trial to assess whether daily low-dose aspirin (81mg) can reduce the rate of cognitive decline in elderly patients with mild cognitive impairment who are at high risk for developing Alzheimer's disease.",
+  "condition": "Alzheimer's Disease",
+  "intervention": {
+    "type": "Drug",
+    "name": "Aspirin",
+    "dosage": "81mg daily",
+    "duration": "24 months"
+  },
+  "phase": "Phase 3",
+  "status": "Recruiting",
+  "sponsor": "University Medical Center",
+  "enrollment": {
+    "target": 2000,
+    "actual": 1250
+  },
+  "eligibility": {
+    "age_range": "65-85 years",
+    "gender": "All",
+    "criteria": "Mild cognitive impairment, APOE4 positive, no contraindications to aspirin"
+  },
+  "primary_outcome": "Change in cognitive assessment scores over 24 months",
+  "secondary_outcomes": [
+    "Incidence of cardiovascular events",
+    "Safety and tolerability measures",
+    "Biomarker changes (amyloid, tau)"
+  ],
+  "start_date": "2023-01-15",
+  "completion_date": "2025-12-31"
+}

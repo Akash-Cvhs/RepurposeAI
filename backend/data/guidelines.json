@@ -1,0 +1,50 @@
+{
+  "fda_guidance": {
+    "drug_repurposing": [
+      "505(b)(2) pathway available for approved drugs with new indications",
+      "Clinical data requirements may be reduced based on existing safety profile",
+      "Biomarker strategies encouraged for proof-of-concept studies"
+    ],
+    "rare_diseases": [
+      "Orphan drug designation provides 7-year market exclusivity",
+      "Accelerated approval pathway available with surrogate endpoints",
+      "FDA breakthrough therapy designation for significant improvement"
+    ]
+  },
+  "ema_guidance": {
+    "repurposing": [
+      "Article 8(3) of Directive 2001/83/EC for well-established medicinal use",
+      "Hybrid applications acceptable with mixed data package",
+      "PRIME scheme available for medicines addressing unmet medical need"
+    ]
+  },
+  "ich_guidelines": {
+    "safety": [
+      "ICH M7: Assessment of DNA reactive impurities",
+      "ICH E2E: Pharmacovigilance planning",
+      "ICH S7A: Safety pharmacology studies for human pharmaceuticals"
+    ],
+    "efficacy": [
+      "ICH E8: General considerations for clinical trials",
+      "ICH E9: Statistical principles for clinical trials",
+      "ICH E10: Choice of control group and related issues"
+    ]
+  },
+  "therapeutic_areas": {
+    "oncology": {
+      "endpoints": ["Overall survival", "Progression-free survival", "Objective response rate"],
+      "biomarkers": ["PD-L1 expression", "Microsatellite instability", "Tumor mutation burden"],
+      "considerations": ["Combination therapy strategies", "Resistance mechanisms", "Patient stratification"]
+    },
+    "neurology": {
+      "endpoints": ["Cognitive assessments", "Functional scales", "Biomarker changes"],
+      "biomarkers": ["Amyloid PET", "Tau protein", "Neurofilament light chain"],
+      "considerations": ["Disease heterogeneity", "Slow progression", "Regulatory precedents"]
+    },
+    "cardiology": {
+      "endpoints": ["Major adverse cardiovascular events", "Hospitalization rates", "Quality of life"],
+      "biomarkers": ["NT-proBNP", "Troponin", "CRP"],
+      "considerations": ["Cardiovascular safety", "Drug interactions", "Comorbidities"]
+    }
+  }
+}
