@@ -1,161 +1,193 @@
 """
-Optional MCP (Model Context Protocol) server for VHS Drug Repurposing Platform
-This provides structured tools for external AI systems to interact with the platform
+MCP Server — FastAPI + async tool execution + TTL cache + session management
+
+Endpoints:
+    POST /mcp/run              Execute a registered tool
+    GET  /mcp/tools            List available tools
+    GET  /mcp/session/{id}     Inspect session history
+    GET  /mcp/health           Health check
+
+Run:
+    cd backend
+    uvicorn mcp.server:app --reload --port 8001
 """
 
-from typing import List, Dict, Any
+import asyncio
+import hashlib
 import json
-import pandas as pd
-from pathlib import Path
+import time
+from typing import Any, Dict
 
-# MCP Server Implementation (Optional Extension)
-class VHSMCPServer:
-    """MCP server for drug repurposing platform tools"""
-    
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+from tools.internal_rag_tool import internal_rag_tool
+
+app = FastAPI(title="VHS MCP Server", version="1.0.0")
+
+
+# ---------------------------------------------------------------------------
+# Schemas
+# ---------------------------------------------------------------------------
+
+class MCPRequest(BaseModel):
+    tool_name: str
+    payload: Dict[str, Any]
+    session_id: str = "default"
+
+
+class InternalRAGInput(BaseModel):
+    query: str
+    top_k: int = 5
+
+
+# ---------------------------------------------------------------------------
+# TTL Cache
+# ---------------------------------------------------------------------------
+
+class Cache:
+    def __init__(self, default_ttl: int = 3600):
+        self._store: Dict[str, Dict] = {}
+        self.default_ttl = default_ttl
+
+    def _key(self, tool_name: str, payload: dict) -> str:
+        raw = f"{tool_name}:{json.dumps(payload, sort_keys=True)}"
+        return hashlib.md5(raw.encode()).hexdigest()
+
+    def get(self, tool_name: str, payload: dict) -> Any | None:
+        item = self._store.get(self._key(tool_name, payload))
+        if item and (time.time() - item["ts"]) < self.default_ttl:
+            return item["value"]
+        return None
+
+    def set(self, tool_name: str, payload: dict, value: Any) -> None:
+        self._store[self._key(tool_name, payload)] = {
+            "value": value,
+            "ts": time.time(),
+        }
+
+
+# ---------------------------------------------------------------------------
+# Session Manager
+# ---------------------------------------------------------------------------
+
+class SessionManager:
     def __init__(self):
-        self.base_dir = Path(__file__).parent.parent
-        self.data_dir = self.base_dir / "data"
-        self.archives_dir = self.base_dir / "archives"
-    
-    async def list_trials(self, condition: str = None, molecule: str = None) -> List[Dict[str, Any]]:
-        """List clinical trials with optional filtering"""
-        try:
-            trials_df = pd.read_csv(self.data_dir / "trials.csv")
-            
-            if condition:
-                trials_df = trials_df[trials_df['condition'].str.contains(condition, case=False, na=False)]
-            
-            if molecule:
-                trials_df = trials_df[trials_df['intervention'].str.contains(molecule, case=False, na=False)]
-            
-            return trials_df.to_dict('records')
-        
-        except FileNotFoundError:
-            return []
-    
-    async def list_patents(self, query: str = None, active_only: bool = True) -> List[Dict[str, Any]]:
-        """List patents with optional filtering"""
-        try:
-            patents_df = pd.read_csv(self.data_dir / "patents.csv")
-            
-            if active_only:
-                patents_df = patents_df[patents_df['status'] == 'Active']
-            
-            if query:
-                mask = (patents_df['title'].str.contains(query, case=False, na=False) |
-                       patents_df['abstract'].str.contains(query, case=False, na=False))
-                patents_df = patents_df[mask]
-            
-            return patents_df.to_dict('records')
-        
-        except FileNotFoundError:
-            return []
-    
-    async def list_reports(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """List generated reports"""
-        try:
-            runs_file = self.archives_dir / "runs.json"
-            
-            if runs_file.exists():
-                with open(runs_file, 'r') as f:
-                    runs = json.load(f)
-                
-                return runs[-limit:] if runs else []
-            
-            return []
-        
-        except (FileNotFoundError, json.JSONDecodeError):
-            return []
-    
-    async def get_guidelines(self, therapeutic_area: str = None) -> Dict[str, Any]:
-        """Get regulatory guidelines"""
-        try:
-            guidelines_file = self.data_dir / "guidelines.json"
-            
-            with open(guidelines_file, 'r') as f:
-                guidelines = json.load(f)
-            
-            if therapeutic_area and therapeutic_area in guidelines.get('therapeutic_areas', {}):
-                return {
-                    'therapeutic_area': therapeutic_area,
-                    'guidelines': guidelines['therapeutic_areas'][therapeutic_area]
-                }
-            
-            return guidelines
-        
-        except (FileNotFoundError, json.JSONDecodeError):
-            return {}
+        self._sessions: Dict[str, Dict] = {}
 
-# MCP Tool Definitions
-MCP_TOOLS = [
-    {
-        "name": "list_trials",
-        "description": "List clinical trials with optional filtering by condition or molecule",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "condition": {
-                    "type": "string",
-                    "description": "Filter by medical condition"
-                },
-                "molecule": {
-                    "type": "string", 
-                    "description": "Filter by drug/molecule name"
-                }
-            }
-        }
-    },
-    {
-        "name": "list_patents",
-        "description": "List patents with optional filtering",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Search query for patent title or abstract"
-                },
-                "active_only": {
-                    "type": "boolean",
-                    "description": "Only return active patents",
-                    "default": True
-                }
-            }
-        }
-    },
-    {
-        "name": "list_reports", 
-        "description": "List previously generated analysis reports",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "limit": {
-                    "type": "integer",
-                    "description": "Maximum number of reports to return",
-                    "default": 10
-                }
-            }
-        }
-    },
-    {
-        "name": "get_guidelines",
-        "description": "Get regulatory guidelines, optionally filtered by therapeutic area",
-        "parameters": {
-            "type": "object", 
-            "properties": {
-                "therapeutic_area": {
-                    "type": "string",
-                    "description": "Specific therapeutic area (oncology, neurology, cardiology)"
-                }
-            }
-        }
-    }
-]
+    def get(self, session_id: str) -> Dict:
+        if session_id not in self._sessions:
+            self._sessions[session_id] = {"history": []}
+        return self._sessions[session_id]
 
-if __name__ == "__main__":
-    # Example usage
-    server = VHSMCPServer()
-    
-    # This would be integrated with an actual MCP server framework
-    print("VHS Drug Repurposing MCP Server initialized")
-    print(f"Available tools: {[tool['name'] for tool in MCP_TOOLS]}")
+    def append(self, session_id: str, entry: dict) -> None:
+        self.get(session_id)["history"].append(entry)
+
+
+# ---------------------------------------------------------------------------
+# Tool Registry
+# ---------------------------------------------------------------------------
+
+class ToolRegistry:
+    def __init__(self):
+        self._tools: Dict[str, Any] = {}
+
+    def register(self, name: str, func) -> None:
+        self._tools[name] = func
+
+    def get(self, name: str):
+        if name not in self._tools:
+            raise ValueError(f"Tool '{name}' is not registered.")
+        return self._tools[name]
+
+    def list_tools(self) -> list[str]:
+        return list(self._tools.keys())
+
+
+# ---------------------------------------------------------------------------
+# MCP Core
+# ---------------------------------------------------------------------------
+
+VALIDATORS: Dict[str, type] = {
+    "internal_rag": InternalRAGInput,
+}
+
+
+class MCPServer:
+    def __init__(self):
+        self.cache = Cache()
+        self.sessions = SessionManager()
+        self.registry = ToolRegistry()
+
+    def register_tool(self, name: str, func) -> None:
+        self.registry.register(name, func)
+
+    async def handle(self, req: MCPRequest) -> Dict[str, Any]:
+        tool_name = req.tool_name
+        payload = req.payload
+        session_id = req.session_id
+
+        # Validate payload if a schema exists for this tool
+        if tool_name in VALIDATORS:
+            payload = VALIDATORS[tool_name](**payload).dict()
+
+        # Return cached result if available
+        cached = self.cache.get(tool_name, payload)
+        if cached is not None:
+            return {"cached": True, "data": cached}
+
+        tool = self.registry.get(tool_name)
+
+        # Execute — supports both sync and async tools
+        try:
+            if asyncio.iscoroutinefunction(tool):
+                result = await tool(payload)
+            else:
+                result = await asyncio.to_thread(tool, payload)
+        except Exception as e:
+            return {"error": str(e)}
+
+        self.cache.set(tool_name, payload, result)
+        self.sessions.append(session_id, {
+            "tool": tool_name,
+            "input": payload,
+            "output": result,
+            "ts": time.time(),
+        })
+
+        return {"cached": False, "data": result}
+
+
+# ---------------------------------------------------------------------------
+# Bootstrap — register tools
+# ---------------------------------------------------------------------------
+
+mcp = MCPServer()
+mcp.register_tool("internal_rag", internal_rag_tool)
+
+
+# ---------------------------------------------------------------------------
+# API Endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/mcp/run")
+async def run_tool(req: MCPRequest):
+    tool_name = req.tool_name
+    if tool_name not in mcp.registry.list_tools():
+        raise HTTPException(status_code=404, detail=f"Tool '{tool_name}' not found.")
+    return await mcp.handle(req)
+
+
+@app.get("/mcp/tools")
+def list_tools():
+    return {"tools": mcp.registry.list_tools()}
+
+
+@app.get("/mcp/session/{session_id}")
+def get_session(session_id: str):
+    return mcp.sessions.get(session_id)
+
+
+@app.get("/mcp/health")
+def health():
+    return {"status": "ok", "tools": mcp.registry.list_tools()}

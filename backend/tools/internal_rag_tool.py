@@ -1,0 +1,57 @@
+import faiss
+import pickle
+from pathlib import Path
+from sentence_transformers import SentenceTransformer
+from functools import lru_cache
+
+# Always resolve relative to this file — safe regardless of cwd
+BASE_DIR = Path(__file__).parent.parent
+INDEX_PATH = BASE_DIR / "vectorstore" / "faiss_index"
+
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+
+@lru_cache()
+def load_index():
+    index_file = INDEX_PATH / "index.faiss"
+    meta_file = INDEX_PATH / "meta.pkl"
+
+    if not index_file.exists() or not meta_file.exists():
+        raise FileNotFoundError(
+            f"FAISS index not found at {INDEX_PATH}. "
+            "Run: python scripts/index_internal_docs.py"
+        )
+
+    index = faiss.read_index(str(index_file))
+    with open(meta_file, "rb") as f:
+        data = pickle.load(f)
+
+    return index, data["chunks"], data["meta"]
+
+
+def internal_rag_tool(payload: dict) -> dict:
+    query = payload.get("query", "")
+    top_k = int(payload.get("top_k", 5))
+
+    if not query:
+        return {"error": "query is required", "results": []}
+
+    try:
+        index, chunks, metadata = load_index()
+    except FileNotFoundError as e:
+        return {"error": str(e), "results": []}
+
+    q_emb = model.encode([query])
+    D, I = index.search(q_emb, top_k)
+
+    results = [
+        {
+            "text": chunks[idx],
+            "source": metadata[idx]["source"],
+            "score": float(D[0][rank]),
+        }
+        for rank, idx in enumerate(I[0])
+        if idx < len(chunks)
+    ]
+
+    return {"query": query, "results": results}

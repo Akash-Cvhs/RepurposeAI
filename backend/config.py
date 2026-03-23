@@ -16,6 +16,7 @@ DATA_DIR = BASE_DIR / "data"
 ARCHIVES_DIR = BASE_DIR / "archives"
 REPORTS_DIR = ARCHIVES_DIR / "reports"
 RUNS_INDEX_FILE = ARCHIVES_DIR / "runs.json"
+VECTORSTORE_DIR = BASE_DIR / "vectorstore" / "faiss_index"
 
 # Data Files
 TRIALS_CSV = DATA_DIR / "trials.csv"
