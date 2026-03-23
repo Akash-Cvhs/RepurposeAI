@@ -18,6 +18,8 @@ export interface RunResponse {
   summary: string;
   report_path: string;
   report_url?: string;
+  molecule?: string;
+  indication?: string;
   logs: string[];
   trials?: Record<string, unknown>[];
   patents?: Record<string, unknown>[];

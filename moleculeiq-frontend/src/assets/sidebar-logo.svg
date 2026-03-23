@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">REPURPOSEAI Logo</title>
+  <desc id="desc">Three upward orange chevrons with a base triangle.</desc>
+  <rect width="256" height="256" fill="#f2f2f2"/>
+  <path d="M128 28 L28 124 L48 144 L128 68 L208 144 L228 124 Z" fill="#ff4d2a"/>
+  <path d="M128 84 L54 156 L74 176 L128 124 L182 176 L202 156 Z" fill="#ff4d2a"/>
+  <path d="M128 140 L82 188 L102 208 L128 184 L154 208 L174 188 Z" fill="#ff4d2a"/>
+  <path d="M128 192 L102 226 L154 226 Z" fill="#ff4d2a"/>
+</svg>

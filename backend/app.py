@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
-from tempfile import TemporaryDirectory
 import logging
 import time
 from typing import Any, Dict, List, cast
@@ -18,6 +17,7 @@ from backend.config import (
     CORS_ALLOWED_ORIGINS,
     ENABLE_ARCHIVE_RUNS,
     ENABLE_LIVE_APIS,
+    INTERNAL_UPLOADS_DIR,
     MAX_UPLOAD_BYTES,
     get_live_connector_status,
     get_live_mode_warnings,
@@ -58,7 +58,10 @@ def _report_url_from_path(report_path: str) -> str | None:
     return f"/reports/{path.name}"
 
 
-def _save_uploaded_files(tmp_dir: Path, uploaded_files: List[UploadFile | str | None]) -> List[str]:
+def _save_uploaded_files(uploaded_files: List[UploadFile | str | None], request_id: str) -> List[str]:
+    upload_dir = (INTERNAL_UPLOADS_DIR / request_id).resolve()
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
     saved_paths: List[str] = []
     for file in uploaded_files:
         if file is None:
@@ -79,7 +82,7 @@ def _save_uploaded_files(tmp_dir: Path, uploaded_files: List[UploadFile | str | 
         if not safe_filename.lower().endswith(".pdf"):
             raise HTTPException(status_code=400, detail=f"Only PDF uploads are supported: {safe_filename}")
 
-        path = tmp_dir / safe_filename
+        path = upload_dir / safe_filename
         data = file.file.read()
         if len(data) > MAX_UPLOAD_BYTES:
             raise HTTPException(status_code=413, detail=f"File too large: {safe_filename}")
@@ -102,7 +105,28 @@ def download_report(report_name: str) -> FileResponse:
     if not report_path.exists() or report_path.suffix.lower() != ".pdf":
         raise HTTPException(status_code=404, detail="Report not found")
 
-    return FileResponse(path=report_path, media_type="application/pdf", filename=safe_name)
+    # Inline response is used by the frontend iframe preview.
+    return FileResponse(
+        path=report_path,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
+    )
+
+
+@app.get("/reports/{report_name}/download")
+def download_report_attachment(report_name: str) -> FileResponse:
+    safe_name = Path(report_name).name
+    report_path = (Path(__file__).resolve().parent / "archives" / "reports" / safe_name).resolve()
+
+    if not report_path.exists() or report_path.suffix.lower() != ".pdf":
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    return FileResponse(
+        path=report_path,
+        media_type="application/pdf",
+        filename=safe_name,
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+    )
 
 
 @app.post("/run", response_model=RunResponse)
@@ -116,93 +140,101 @@ def run_pipeline(
 
     request_id = str(uuid4())
 
-    with TemporaryDirectory(prefix="vhs-run-") as temp_dir:
-        request_start = time.perf_counter()
-        tmp_path = Path(temp_dir)
-        uploaded_pdf_paths = _save_uploaded_files(tmp_path, files)
-        live_warnings = get_live_mode_warnings()
-        connector_status = get_live_connector_status()
+    request_start = time.perf_counter()
+    uploaded_pdf_paths = _save_uploaded_files(files, request_id=request_id)
+    live_warnings = get_live_mode_warnings()
+    connector_status = get_live_connector_status()
 
-        initial_state: WorkflowState = {
-            "request_id": request_id,
-            "query": normalized_query,
-            "logs": [f"[guard] {warning}" for warning in live_warnings],
-            "trials": [],
-            "patents": [],
-            "fto_risk": "unknown",
-            "internal_insights": [],
-            "web_findings": [],
-            "uploaded_pdf_paths": uploaded_pdf_paths,
-            "use_live_apis": ENABLE_LIVE_APIS,
-            "archive_run": ENABLE_ARCHIVE_RUNS,
-        }
+    initial_state: WorkflowState = {
+        "request_id": request_id,
+        "query": normalized_query,
+        "logs": [f"[guard] {warning}" for warning in live_warnings],
+        "trials": [],
+        "patents": [],
+        "fto_risk": "unknown",
+        "internal_insights": [],
+        "web_findings": [],
+        "uploaded_pdf_paths": uploaded_pdf_paths,
+        "use_live_apis": ENABLE_LIVE_APIS,
+        "archive_run": ENABLE_ARCHIVE_RUNS,
+    }
 
-        final_state = cast(WorkflowState, workflow_app.invoke(initial_state))
+    final_state = cast(WorkflowState, workflow_app.invoke(initial_state))
 
-        trials = final_state.get("trials", []) or []
-        patents = final_state.get("patents", []) or []
-        web_findings = final_state.get("web_findings", []) or []
-        internal_insights = final_state.get("internal_insights", [])
-        use_live_apis = bool(initial_state.get("use_live_apis", False))
-        agent_errors = final_state.get("agent_errors", {})
-        if not isinstance(agent_errors, dict):
-            agent_errors = {}
+    trials = final_state.get("trials", []) or []
+    patents = final_state.get("patents", []) or []
+    web_findings = final_state.get("web_findings", []) or []
+    internal_insights = final_state.get("internal_insights", [])
+    use_live_apis = bool(initial_state.get("use_live_apis", False))
+    agent_errors = final_state.get("agent_errors", {})
+    if not isinstance(agent_errors, dict):
+        agent_errors = {}
 
-        agent_metrics = final_state.get("agent_metrics", {})
-        if not isinstance(agent_metrics, dict):
-            agent_metrics = {}
+    agent_metrics = final_state.get("agent_metrics", {})
+    if not isinstance(agent_metrics, dict):
+        agent_metrics = {}
 
-        request_duration_ms = round((time.perf_counter() - request_start) * 1000.0, 3)
+    request_duration_ms = round((time.perf_counter() - request_start) * 1000.0, 3)
 
-        if isinstance(internal_insights, str):
-            internal_doc_count = 0 if "no internal documents" in internal_insights.lower() else 1
-        else:
-            internal_doc_count = len(internal_insights)
+    if isinstance(internal_insights, str):
+        internal_doc_count = 0 if "no internal documents" in internal_insights.lower() else 1
+    else:
+        internal_doc_count = len(internal_insights)
 
-        return RunResponse(
-            request_id=request_id,
-            summary=final_state.get("summary", ""),
-            report_path=final_state.get("report_path", ""),
-            report_url=_report_url_from_path(final_state.get("report_path", "")),
-            molecule=final_state.get("molecule"),
-            indication=final_state.get("indication"),
-            master_confidence=final_state.get("master_confidence", "unknown"),
-            query_plan=final_state.get("query_plan", []),
-            fto_risk=final_state.get("fto_risk", "unknown"),
-            risk_assumptions=final_state.get("risk_assumptions", []),
-            agent_errors=agent_errors,
-            metrics=Metrics(
-                trial_count=len(trials),
-                patent_count=len(patents),
-                web_finding_count=len(web_findings) if isinstance(web_findings, list) else 1,
-                internal_insight_count=internal_doc_count,
+    return RunResponse(
+        request_id=request_id,
+        summary=final_state.get("summary", ""),
+        report_path=final_state.get("report_path", ""),
+        report_url=_report_url_from_path(final_state.get("report_path", "")),
+        molecule=final_state.get("molecule"),
+        indication=final_state.get("indication"),
+        master_confidence=final_state.get("master_confidence", "unknown"),
+        query_plan=final_state.get("query_plan", []),
+        fto_risk=final_state.get("fto_risk", "unknown"),
+        risk_assumptions=final_state.get("risk_assumptions", []),
+        agent_errors=agent_errors,
+        metrics=Metrics(
+            trial_count=len(trials),
+            patent_count=len(patents),
+            web_finding_count=len(web_findings) if isinstance(web_findings, list) else 1,
+            internal_insight_count=internal_doc_count,
+        ),
+        timing_metrics=TimingMetrics(
+            request_duration_ms=request_duration_ms,
+            agents=agent_metrics,
+        ),
+        data_sources=DataSources(
+            trials="clinicaltrials.gov api v2" if use_live_apis else "backend/data/trials.csv",
+            patents=(
+                "serpapi google_patents"
+                if use_live_apis and connector_status.get("serpapi_patents", False)
+                else "backend/data/patents.csv"
             ),
-            timing_metrics=TimingMetrics(
-                request_duration_ms=request_duration_ms,
-                agents=agent_metrics,
+            guidelines=(
+                "tavily search"
+                if use_live_apis and connector_status.get("tavily", False)
+                else "backend/data/guidelines.json"
             ),
-            data_sources=DataSources(
-                trials="clinicaltrials.gov api v2" if use_live_apis else "backend/data/trials.csv",
-                patents=(
-                    "serpapi google_patents"
-                    if use_live_apis and connector_status.get("serpapi_patents", False)
-                    else "backend/data/patents.csv"
-                ),
-                guidelines=(
-                    "tavily search"
-                    if use_live_apis and connector_status.get("tavily", False)
-                    else "backend/data/guidelines.json"
-                ),
-                internal_docs_uploaded=internal_doc_count > 0,
-            ),
-            logs=final_state.get("logs", []),
-        )
+            internal_docs_uploaded=internal_doc_count > 0,
+        ),
+        logs=final_state.get("logs", []),
+    )
 
 
 @app.get("/archives")
 def get_archives() -> ArchivesResponse:
     runs = read_archive_entries()
+    existing_runs: list[dict[str, Any]] = []
+
     for run in runs:
         report_path = str(run.get("report_path") or "")
-        run["report_url"] = _report_url_from_path(report_path)
-    return ArchivesResponse(runs=runs)
+        report_file = Path(report_path)
+        if not report_file.exists() or report_file.suffix.lower() != ".pdf":
+            # Skip stale entries so the frontend never resolves a broken latest report.
+            continue
+
+        run_copy = dict(run)
+        run_copy["report_url"] = _report_url_from_path(report_path)
+        existing_runs.append(run_copy)
+
+    return ArchivesResponse(runs=existing_runs)

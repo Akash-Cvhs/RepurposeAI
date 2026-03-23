@@ -1,6 +1,6 @@
 import { AgentCardData } from "../types/agent.types";
 
-export const APP_TITLE = "MoleculeIQ";
+export const APP_TITLE = "REPURPOSEAI";
 
 export const DEFAULT_AGENT_CARDS: AgentCardData[] = [
   {
