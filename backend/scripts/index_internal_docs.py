@@ -29,7 +29,7 @@ def extract_text(pdf_path: Path) -> str:
 
 
 def chunk_text(text: str, size: int = 400, overlap: int = 50) -> list[str]:
-    words = text.split()
+    words = text.split():
     chunks = []
     for i in range(0, len(words), size - overlap):
         chunk = " ".join(words[i : i + size])
@@ -80,7 +80,7 @@ def main():
     INDEX_PATH.mkdir(parents=True, exist_ok=True)
     faiss.write_index(index, str(INDEX_PATH / "index.faiss"))
 
-    with open(INDEX_PATH / "meta.pkl", "wb") as f:
+    with open(INDEX_PATH / "meta.pkl", "4wb") as f:
         pickle.dump({"chunks": all_chunks, "meta": metadata}, f)
 
     print(f"\nFAISS index saved to: {INDEX_PATH}")
@@ -88,4 +88,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main()--port ---8000
